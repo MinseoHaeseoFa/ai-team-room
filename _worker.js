@@ -226,6 +226,173 @@ async function postMessage(env, slug, payload) {
   return { message: messages[0] };
 }
 
+// ---------- 제미나이(Gemini) 자동 답글 ----------
+// env.GEMINI_API_KEY 가 설정된 경우에만 동작합니다. 키가 없으면 예전과 똑같이 조용히 넘어갑니다.
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+const GEMINI_HISTORY_LIMIT = 15;
+const GEMINI_TIMEOUT_MS = 20000;
+const GEMINI_MAX_CHARS = 4000;
+
+// 본문에 @이름 이 있는지 (공백 허용: "@ 제미나이" 도 인정)
+function mentions(text, name) {
+  return new RegExp('@\\s*' + name).test(text);
+}
+
+// 무한 루프 방지 규칙 (이 함수 하나만 고치면 호출 정책이 바뀝니다)
+//  - 제미나이 글        → 절대 응답하지 않음
+//  - 김비서 글          → 본문에 @제미나이 가 있을 때만
+//  - 그 외(사람 등)     → @김비서·@뮤즈·@클로드 만 콕 집어 부른 경우는 제외하고 응답
+function shouldGeminiReply(sender, content) {
+  const s = String(sender == null ? '' : sender).trim();
+  const c = String(content == null ? '' : content);
+  if (s === '제미나이') return false;
+  if (s === '김비서') return mentions(c, '제미나이');
+  if (mentions(c, '제미나이')) return true;
+  if (mentions(c, '김비서') || mentions(c, '뮤즈') || mentions(c, '클로드')) return false;
+  return true;
+}
+
+function geminiSystemPrompt(room) {
+  const roomName = (room && room.name) || '회의실';
+  const roomDesc = (room && room.description) || '';
+  return [
+    '당신은 쿠사리님(대표)의 "AI 팀 회의실"에 참여한 AI 팀원 "제미나이"입니다.',
+    `지금 있는 방: ${roomName}${roomDesc ? ` — ${roomDesc}` : ''}`,
+    '',
+    '역할: 리서치 · 교차검증 · 실무 조언자.',
+    '팀 구성: 쿠사리(대표·총괄 의사결정), 김비서(총괄 AI 비서·실행·배포), 뮤즈(크리에이티브·문서·기획), 제미나이(리서치·교차검증), 클로드(개발·아키텍처).',
+    '',
+    '[답변 원칙]',
+    '1. 한국어 존댓말로, 간결하고 핵심적인 실무 의견을 씁니다. 인사말·서론·자기소개 없이 바로 본론부터 씁니다.',
+    '2. 3~6줄 또는 짧은 목록으로 정리합니다. 전체 길이는 4000자를 넘기지 않습니다.',
+    '3. 모르는 사실은 추측하거나 만들어내지 않습니다. 확인이 필요하면 "확인 필요"라고 분명히 밝힙니다.',
+    '4. 확인되지 않은 수치·링크·출처는 쓰지 않습니다.',
+    '5. 다른 팀원의 의견에는 동의·보완·반대의 이유를 근거와 함께 짧게 덧붙여 교차검증합니다.',
+    '6. 마크다운(굵게, 목록, `코드`)은 회의실 화면에서 그대로 렌더링됩니다. 자기 이름 서명은 붙이지 않습니다.',
+  ].join('\n');
+}
+
+// 방의 최근 메시지를 시간순(오래된 → 최신)으로 가져옵니다.
+async function geminiHistory(env, slug, limit) {
+  const res = await env.DB.prepare(
+    `select id, sender, content from messages where room_slug = ? order by id desc limit ?`
+  )
+    .bind(slug, limit)
+    .all();
+  return (res.results || []).slice().reverse();
+}
+
+function geminiTranscript(rows) {
+  return rows
+    .map((r) => {
+      const name = String(r.sender == null ? '참여자' : r.sender).trim() || '참여자';
+      const body = String(r.content || '').trim() || '(첨부 파일만 올림)';
+      return `[${name}] ${body}`;
+    })
+    .join('\n');
+}
+
+// Gemini 한 모델 호출. 실패하면 예외를 던져 다음 모델로 넘깁니다.
+async function callGemini(env, model, systemPrompt, userText, timeoutMs) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(
+        env.GEMINI_API_KEY
+      )}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: userText }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+        }),
+      }
+    );
+    if (!res.ok) {
+      let detail = '';
+      try {
+        detail = (await res.text()).slice(0, 200);
+      } catch (e) {
+        detail = '';
+      }
+      throw new Error(`gemini_http_${res.status}${detail ? ':' + detail : ''}`);
+    }
+    const data = await res.json();
+    const cand = (data && data.candidates && data.candidates[0]) || null;
+    if (!cand) {
+      const blocked = data && data.promptFeedback && data.promptFeedback.blockReason;
+      throw new Error(blocked ? `gemini_blocked:${blocked}` : 'gemini_no_candidates');
+    }
+    const parts = (cand.content && cand.content.parts) || [];
+    const out = parts
+      .map((p) => (p && typeof p.text === 'string' ? p.text : ''))
+      .join('')
+      .trim();
+    if (!out) throw new Error(`gemini_empty:${cand.finishReason || 'unknown'}`);
+    return out;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// 1순위 모델이 실패하면(모델 미지원·과부하 등) 2순위 모델로 한 번 더 시도합니다.
+async function geminiAnswer(env, systemPrompt, userText) {
+  const models = [...new Set([...(env.GEMINI_MODEL ? [env.GEMINI_MODEL] : []), ...GEMINI_MODELS])];
+  let lastErr = null;
+  for (const model of models) {
+    try {
+      return await callGemini(env, model, systemPrompt, userText, GEMINI_TIMEOUT_MS);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error('gemini_failed');
+}
+
+// ctx.waitUntil 로 띄우는 백그라운드 작업. 어떤 실패도 원래 메시지 저장에는 영향을 주지 않습니다.
+async function runGeminiReply(env, room, trigger) {
+  try {
+    if (!env.GEMINI_API_KEY || !trigger || !trigger.id) return;
+    const slug = trigger.room || (room && room.slug);
+    if (!slug) return;
+
+    // 같은 메시지에 두 번 답하지 않습니다(중복 요청·재시도 대비).
+    const already = await env.DB.prepare(
+      `select id from messages where room_slug = ? and sender = '제미나이' and reply_to_id = ? limit 1`
+    )
+      .bind(slug, trigger.id)
+      .first();
+    if (already) return;
+
+    const rows = await geminiHistory(env, slug, GEMINI_HISTORY_LIMIT);
+    const userText = [
+      '아래는 이 방의 최근 대화 기록입니다. 마지막 메시지에 제미나이로서 바로 답글을 남겨 주세요.',
+      '',
+      geminiTranscript(rows),
+      '',
+      `위 마지막 메시지(#${trigger.id}, ${trigger.sender})에 대한 답변:`,
+    ].join('\n');
+
+    let answer = await geminiAnswer(env, geminiSystemPrompt(room), userText);
+    answer = String(answer || '').trim();
+    if (!answer) return;
+    if (answer.length > GEMINI_MAX_CHARS) answer = answer.slice(0, GEMINI_MAX_CHARS);
+
+    await env.DB.prepare(
+      `insert into messages (room_slug, sender, content, reply_to_id, attachment_id, created_at)
+       values (?, '제미나이', ?, ?, null, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
+    )
+      .bind(slug, answer, trigger.id)
+      .run();
+  } catch (err) {
+    console.error('[gemini] reply failed:', String(err && err.message ? err.message : err));
+  }
+}
+
 const DOCS_TEMPLATE = `# 쿠사리 AI 팀 회의실 API 사용법
 
 쿠사리님과 AI 팀(김비서·뮤즈·제미나이·클로드)이 한 화면의 방(Room)별로 대화하는 경량 회의실입니다.
@@ -304,7 +471,7 @@ async function docsText(env, url) {
     .replaceAll('__FIRST_ROOM__', firstRoom ? firstRoom.slug : 'general');
 }
 
-async function handleApi(request, env, url) {
+async function handleApi(request, env, url, ctx) {
   const parts = url.pathname.split('/').filter(Boolean); // ['api', ...]
   const method = request.method.toUpperCase();
 
@@ -316,7 +483,13 @@ async function handleApi(request, env, url) {
     } catch (e) {
       dbOk = false;
     }
-    return json({ ok: dbOk, service: 'ai-team-room', db: dbOk, time: new Date().toISOString() });
+    return json({
+      ok: dbOk,
+      service: 'ai-team-room',
+      db: dbOk,
+      gemini: Boolean(env.GEMINI_API_KEY),
+      time: new Date().toISOString(),
+    });
   }
 
   if (!authorized(request, env, url)) {
@@ -412,7 +585,15 @@ async function handleApi(request, env, url) {
       }
       const out = await postMessage(env, slug, payload || {});
       if (out.error) return json({ ok: false, error: 'invalid_request', message: out.error }, out.status || 400);
-      return json({ ok: true, room, message: out.message }, 201);
+
+      // 제미나이 자동 답글: 사용자 화면의 201 응답이 늦어지지 않도록 ctx.waitUntil 로 띄웁니다.
+      const saved = out.message;
+      if (saved && env.GEMINI_API_KEY && shouldGeminiReply(saved.sender, saved.content)) {
+        const job = runGeminiReply(env, room, saved);
+        if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(job);
+        else await job; // ctx 가 없는 로컬 테스트에서는 끝까지 기다립니다.
+      }
+      return json({ ok: true, room, message: saved }, 201);
     }
 
     return json({ ok: false, error: 'method_not_allowed' }, 405);
@@ -422,12 +603,12 @@ async function handleApi(request, env, url) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
       try {
-        return await handleApi(request, env, url);
+        return await handleApi(request, env, url, ctx);
       } catch (err) {
         return json(
           { ok: false, error: 'server_error', message: String(err && err.message ? err.message : err) },

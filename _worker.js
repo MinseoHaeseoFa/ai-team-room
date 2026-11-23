@@ -530,6 +530,22 @@ async function handleApi(request, env, url, ctx) {
   if (parts[1] === 'gemini' && parts[2] === 'check' && method === 'GET') {
     // 연동 진단: 실제 Gemini 를 한 번 호출해 모델·지연·오류 원인을 알려줍니다. (인증 필요)
     if (!env.GEMINI_API_KEY) return json({ ok: false, gemini: false, message: 'GEMINI_API_KEY 가 설정되지 않았습니다.' }, 400);
+    if (url.searchParams.get('list') === 'models') {
+      try {
+        const r = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models?pageSize=100&key=${encodeURIComponent(env.GEMINI_API_KEY)}`,
+          { headers: { 'content-type': 'application/json' } }
+        );
+        const data = await r.json();
+        if (!r.ok) return json({ ok: false, error: data }, 502);
+        const models = (data.models || [])
+          .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+          .map((m) => ({ name: String(m.name || '').replace(/^models\//, ''), display: m.displayName || '' }));
+        return json({ ok: true, count: models.length, models });
+      } catch (err) {
+        return json({ ok: false, error: String(err && err.message ? err.message : err).slice(0, 300) }, 502);
+      }
+    }
     const model = url.searchParams.get('model') || env.GEMINI_MODEL || GEMINI_MODELS[0];
     const t0 = Date.now();
     try {

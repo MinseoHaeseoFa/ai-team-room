@@ -209,7 +209,7 @@ console.log('\n[2] 호출 조건 (무한 루프 방지)');
   check('reply_to_id = 트리거 메시지 id', reply && reply.reply_to_id === 1, reply && reply.reply_to_id);
   check('systemInstruction 에 역할·방정보 포함', geminiCalls[0].body.systemInstruction.parts[0].text.includes('리서치 · 교차검증') && geminiCalls[0].body.systemInstruction.parts[0].text.includes('전체 회의'), geminiCalls[0].body.systemInstruction.parts[0].text.slice(0, 80));
   check('키가 URL 로 전달', geminiCalls[0].key === 'AIza-test-key', geminiCalls[0].key);
-  check('1순위 모델 gemini-2.5-flash', geminiCalls[0].model === 'gemini-2.5-flash', geminiCalls[0].model);
+  check('1순위 모델 gemini-flash-lite-latest', geminiCalls[0].model === 'gemini-flash-lite-latest', geminiCalls[0].model);
 }
 {
   reset([{ text: 'should not be used' }]);
@@ -287,15 +287,15 @@ console.log('\n[4] 오류 안전성');
   const res = await post(env, { sender: '쿠사리', content: '서버 오류 상황' }, ctx);
   await drain(ctx);
   check('Gemini 500 → 메시지 저장은 성공(201)', res.status === 201, res.status);
-  check('500 → 폴백 모델(gemini-2.0-flash) 재시도', geminiCalls.length === 2 && geminiCalls[1].model === 'gemini-2.0-flash', geminiCalls.map((c) => c.model));
+  check('500 → 폴백 모델(gemini-3.1-flash-lite) 재시도', geminiCalls.length === 2 && geminiCalls[1].model === 'gemini-3.1-flash-lite', geminiCalls.map((c) => c.model));
 }
 {
-  reset([{ status: 500 }, { status: 503 }]);
+  reset([{ status: 500 }, { status: 503 }, { status: 429 }]);
   const env = makeEnv(true);
   const ctx = ctxStub();
   const res = await post(env, { sender: '쿠사리', content: '둘 다 실패' }, ctx);
   await drain(ctx);
-  check('두 모델 모두 실패 → 201 유지, 답글 0, 예외 없음', res.status === 201 && env.DB.messages.filter((m) => m.sender === '제미나이').length === 0);
+  check('세 모델 모두 실패 → 201 유지, 답글 0, 예외 없음', res.status === 201 && env.DB.messages.filter((m) => m.sender === '제미나이').length === 0);
   check('사용자 메시지는 정상 저장', env.DB.messages.some((m) => m.sender === '쿠사리' && m.content === '둘 다 실패'));
 }
 {

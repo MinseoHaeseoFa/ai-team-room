@@ -228,9 +228,12 @@ async function postMessage(env, slug, payload) {
 
 // ---------- 제미나이(Gemini) 자동 답글 ----------
 // env.GEMINI_API_KEY 가 설정된 경우에만 동작합니다. 키가 없으면 예전과 똑같이 조용히 넘어갑니다.
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+// 2026-11 확인: gemini-2.5-flash·2.0-flash 는 신규 키에서 404(제공 종료).
+// 플래그십(3.5~3.8 flash)은 시간대에 따라 503(혼잡)이 잦아, 기본은 가장 빠르고 안정적인 lite 계열부터 시도합니다.
+// 모델은 GEMINI_MODEL 환경변수로 1순위를 바꿀 수 있습니다.
+const GEMINI_MODELS = ['gemini-flash-lite-latest', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
 const GEMINI_HISTORY_LIMIT = 15;
-const GEMINI_TIMEOUT_MS = 20000;
+const GEMINI_TIMEOUT_MS = 12000;
 const GEMINI_MAX_CHARS = 4000;
 
 // 본문에 @이름 이 있는지 (공백 허용: "@ 제미나이" 도 인정)

@@ -527,6 +527,28 @@ async function handleApi(request, env, url, ctx) {
     return text(await docsText(env, url));
   }
 
+  if (parts[1] === 'gemini' && parts[2] === 'check' && method === 'GET') {
+    // 연동 진단: 실제 Gemini 를 한 번 호출해 모델·지연·오류 원인을 알려줍니다. (인증 필요)
+    if (!env.GEMINI_API_KEY) return json({ ok: false, gemini: false, message: 'GEMINI_API_KEY 가 설정되지 않았습니다.' }, 400);
+    const model = url.searchParams.get('model') || env.GEMINI_MODEL || GEMINI_MODELS[0];
+    const t0 = Date.now();
+    try {
+      const sample = await callGemini(env, model, '진단용 요청입니다. 아주 짧게 답하세요.', '핑', GEMINI_TIMEOUT_MS);
+      return json({ ok: true, model, ms: Date.now() - t0, sample: String(sample).slice(0, 200) });
+    } catch (err) {
+      return json(
+        {
+          ok: false,
+          model,
+          ms: Date.now() - t0,
+          error: String(err && err.message ? err.message : err).slice(0, 500),
+          hint: 'gemini_http_403/400 이면 키 권한·API 사용 설정, gemini_empty/MISSING 이면 모델명·응답 형식 문제입니다.',
+        },
+        502
+      );
+    }
+  }
+
   if (parts[1] === 'agents' && method === 'GET') {
     return json({
       ok: true,

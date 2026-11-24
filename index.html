@@ -100,6 +100,11 @@
   .content pre code{background:none;border:0;padding:0;font-size:12.4px;line-height:1.5}
   .content ul,.content ol{margin:4px 0;padding-left:20px}
   .content li{margin:1px 0}
+  .content .tbl{overflow-x:auto;margin:7px 0}
+  .content table{border-collapse:collapse;font-size:13px;min-width:60%}
+  .content th,.content td{border:1px solid #2c333f;padding:5px 9px;text-align:left;vertical-align:top;line-height:1.45}
+  .content th{background:#1c222b;color:#dfe6ef;font-weight:700;white-space:nowrap}
+  .content tbody tr:nth-child(even) td{background:#141920}
   .mention{color:#ffd7e5;background:#3a1f2a;border-radius:5px;padding:0 4px;font-weight:600}
   .replyq{
     border-left:3px solid #3b4553;background:#12161d;border-radius:0 8px 8px 0;
@@ -326,8 +331,36 @@
       var lines = part.split('\n');
       var list = null, buf = '';
       function flush(){ if (list){ buf += '</' + list + '>'; list = null; } }
+      var isRow = function(l){ return /^\s*\|?[^|]*\|.*$/.test(l); };
+      var isSep = function(l){ return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(l); };
+      var cellsOf = function(l){
+        var s = l.trim();
+        if (s.charAt(0) === '|') s = s.slice(1);
+        if (s.charAt(s.length - 1) === '|') s = s.slice(0, -1);
+        return s.split('|').map(function(c){ return inlineMd(c.trim()); });
+      };
       for (var j = 0; j < lines.length; j++){
         var line = lines[j];
+        /* 마크다운 표: | a | b |  다음 줄이 |---|---| 이면 표로 그립니다. */
+        if (isRow(line) && j + 1 < lines.length && isSep(lines[j + 1])){
+          flush();
+          var head = cellsOf(line), t = '<div class="tbl"><table><thead><tr>';
+          for (var h = 0; h < head.length; h++) t += '<th>' + head[h] + '</th>';
+          t += '</tr></thead><tbody>';
+          var k = j + 2;
+          while (k < lines.length && isRow(lines[k])){
+            var cs = cellsOf(lines[k]);
+            t += '<tr>';
+            for (var c = 0; c < cs.length; c++) t += '<td>' + cs[c] + '</td>';
+            for (var pad = cs.length; pad < head.length; pad++) t += '<td></td>';
+            t += '</tr>';
+            k++;
+          }
+          t += '</tbody></table></div>';
+          buf += t;
+          j = k - 1;
+          continue;
+        }
         var m = line.match(/^\s*[-*]\s+(.*)$/);
         var om = line.match(/^\s*\d+\.\s+(.*)$/);
         if (m){

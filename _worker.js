@@ -233,8 +233,52 @@ async function postMessage(env, slug, payload) {
 // 모델은 GEMINI_MODEL 환경변수로 1순위를 바꿀 수 있습니다.
 const GEMINI_MODELS = ['gemini-flash-lite-latest', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
 const GEMINI_HISTORY_LIMIT = 15;
-const GEMINI_TIMEOUT_MS = 12000;
+const GEMINI_TIMEOUT_MS = 22000; // 실시간 검색 grounding 왕복까지 기다릴 수 있게 넉넉히
 const GEMINI_MAX_CHARS = 4000;
+const GEMINI_MAX_TOKENS = 3072;
+
+// 매 요청 시점의 한국 시간(KST).
+// 모델이 학습 시점의 날짜(2024·2025년)를 "현재"로 착각하는 고질병을 막으려고
+// 시스템 프롬프트에 요청마다 새로 계산해 넣습니다.
+function kstNow() {
+  const now = new Date();
+  const parts = {};
+  try {
+    for (const p of new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      weekday: 'long',
+      hour: 'numeric',
+      minute: 'numeric',
+      hourCycle: 'h23',
+    }).formatToParts(now)) {
+      parts[p.type] = p.value;
+    }
+  } catch (e) {
+    // Intl 이 막힌 런타임에서는 UTC+9 로 직접 계산합니다.
+  }
+  let y = parts.year, mo = parts.month, d = parts.day, hh = parts.hour, mm = parts.minute, wd = parts.weekday;
+  if (!y || !mo || !d) {
+    const k = new Date(now.getTime() + 9 * 3600 * 1000);
+    y = String(k.getUTCFullYear());
+    mo = String(k.getUTCMonth() + 1);
+    d = String(k.getUTCDate());
+    hh = String(k.getUTCHours());
+    mm = String(k.getUTCMinutes());
+    wd = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][k.getUTCDay()];
+  }
+  const pad = (v) => String(v).replace(/[^0-9]/g, '').padStart(2, '0');
+  const iso = `${y}-${pad(mo)}-${pad(d)}`;
+  return {
+    iso,
+    year: String(y),
+    hour: pad(hh),
+    ko: `${y}년 ${Number(mo)}월 ${Number(d)}일 ${wd} ${pad(hh)}:${pad(mm)} (KST)`,
+    utc: now.toISOString(),
+  };
+}
 
 // 본문에 @이름 이 있는지 (공백 허용: "@ 제미나이" 도 인정)
 function mentions(text, name) {
@@ -258,6 +302,7 @@ function shouldGeminiReply(sender, content) {
 function geminiSystemPrompt(room) {
   const roomName = (room && room.name) || '회의실';
   const roomDesc = (room && room.description) || '';
+  const t = kstNow();
   return [
     '당신은 쿠사리님(대표)의 "AI 팀 회의실"에 참여한 AI 팀원 "제미나이"입니다.',
     `지금 있는 방: ${roomName}${roomDesc ? ` — ${roomDesc}` : ''}`,
@@ -265,13 +310,27 @@ function geminiSystemPrompt(room) {
     '역할: 리서치 · 교차검증 · 실무 조언자.',
     '팀 구성: 쿠사리(대표·총괄 의사결정), 김비서(총괄 AI 비서·실행·배포), 뮤즈(크리에이티브·문서·기획), 제미나이(리서치·교차검증), 클로드(개발·아키텍처).',
     '',
-    '[답변 원칙]',
-    '1. 한국어 존댓말로, 간결하고 핵심적인 실무 의견을 씁니다. 인사말·서론·자기소개 없이 바로 본론부터 씁니다.',
-    '2. 3~6줄 또는 짧은 목록으로 정리합니다. 전체 길이는 4000자를 넘기지 않습니다.',
-    '3. 모르는 사실은 추측하거나 만들어내지 않습니다. 확인이 필요하면 "확인 필요"라고 분명히 밝힙니다.',
-    '4. 확인되지 않은 수치·링크·출처는 쓰지 않습니다.',
-    '5. 다른 팀원의 의견에는 동의·보완·반대의 이유를 근거와 함께 짧게 덧붙여 교차검증합니다.',
-    '6. 마크다운(굵게, 목록, `코드`)은 회의실 화면에서 그대로 렌더링됩니다. 자기 이름 서명은 붙이지 않습니다.',
+    '[현재 시각 — 요청마다 새로 주입됨. 이 값을 절대값으로 믿고 씁니다]',
+    `- 지금은 ${t.ko} 입니다. 오늘 날짜는 ${t.iso}, ${t.year}년입니다.`,
+    `- 연도는 반드시 ${t.year}년을 기준으로 씁니다. 학습 시점의 과거 연도(2024년·2025년 등)를 "올해"·"현재"·"최근"으로 쓰지 않습니다. 2025년은 이미 지난해입니다.`,
+    '- 이미 지난 일정은 과거형으로, 아직 오지 않은 일정은 "예정"으로만 씁니다. 지난 일정을 미래처럼 말하지 않습니다.',
+    '',
+    '[답변 원칙 — 어길 수 없는 규칙]',
+    '1. 빈말 금지. "지금 바로 확인하겠습니다", "심층 분석을 올리겠습니다", "준비하겠습니다", "추적하겠습니다", "정리해 드리겠습니다" 같은 미래형 약속으로 답을 끝내거나 답 대신 쓰지 않습니다.',
+    '   지금 아는 것, 지금 검색한 것, 지금 내린 판단을 그 자리에서 바로 씁니다. 확인하지 못한 것은 "확인 불가(이유)"라고 솔직히 씁니다.',
+    '2. 형식은 안건의 무게에 맞춥니다.',
+    '   - 가벼운 잡담·의견 교환·칭찬·질문: 사람처럼 자연스러운 대화체 2~4문장. 무조건 불릿으로 쪼개지 않습니다.',
+    '   - 분석·리서치·검증·기획·비교 요청: 아래 3단 구조로 충실히 씁니다.',
+    '     [결론] 답부터 한두 문장',
+    '     [근거·수치] 확인된 수치·날짜·출처. 필요하면 표나 목록으로',
+    '     [시사점] 그래서 무엇을 어떻게 판단·행동할지',
+    '3. 기계적 3줄 불릿 복붙 금지. 모든 답을 "- ... - ... - ..." 3개로 맞추는 습관을 버립니다. 내용이 2줄이면 2줄, 표가 필요하면 표로 씁니다.',
+    '4. 앵무새·맞장구 금지. 다른 팀원(쿠사리·김비서·뮤즈·클로드)의 글을 요약하거나 "전적으로 동의합니다"로 시작하지 않습니다. 새 근거, 반론, 또는 놓친 리스크 중 최소 하나를 반드시 보탭니다.',
+    '5. 사실 검증. 수치·날짜·기업 실적·정책 일정은 검색 도구로 확인된 사실만 씁니다. 검색 결과에 없거나 확실하지 않으면 "확인 불가"라고 쓰고, 추정은 "추정"이라고 밝힙니다. 없는 출처·링크·수치를 만들지 않습니다.',
+    '6. 문장을 중간에 끊지 않습니다. 분량이 길어지면 마지막 문장을 완결한 뒤 줄입니다. 전체 4000자 이내, 표는 5행 안쪽으로 핵심만.',
+    '7. 인사말·자기소개·자기 이름 서명은 붙이지 않고 바로 본론부터 씁니다.',
+    '8. 한국어 존댓말. 다른 팀원을 부를 때만 @이름(예: @김비서)을 씁니다.',
+    '9. 마크다운이 화면에서 렌더링됩니다: **굵게**, `코드`, - 목록, 1. 번호목록, | 표 | (첫 줄 다음에 |---| 구분선).',
   ].join('\n');
 }
 
@@ -296,10 +355,18 @@ function geminiTranscript(rows) {
 }
 
 // Gemini 한 모델 호출. 실패하면 예외를 던져 다음 모델로 넘깁니다.
-async function callGemini(env, model, systemPrompt, userText, timeoutMs) {
+// result: { text, finish, grounded, queries }
+async function callGemini(env, model, systemPrompt, userText, timeoutMs, useTools = true) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
+    const body = {
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: 'user', parts: [{ text: userText }] }],
+      generationConfig: { temperature: 0.7, maxOutputTokens: GEMINI_MAX_TOKENS },
+    };
+    // 1차: Google Search grounding (실시간 팩트 조회)
+    if (useTools) body.tools = [{ google_search: {} }];
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(
         env.GEMINI_API_KEY
@@ -308,11 +375,7 @@ async function callGemini(env, model, systemPrompt, userText, timeoutMs) {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         signal: ctrl.signal,
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: 'user', parts: [{ text: userText }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
-        }),
+        body: JSON.stringify(body),
       }
     );
     if (!res.ok) {
@@ -336,9 +399,32 @@ async function callGemini(env, model, systemPrompt, userText, timeoutMs) {
       .join('')
       .trim();
     if (!out) throw new Error(`gemini_empty:${cand.finishReason || 'unknown'}`);
-    return out;
+    const g = cand.groundingMetadata || null;
+    const queries = (g && Array.isArray(g.webSearchQueries) ? g.webSearchQueries : []).slice(0, 5);
+    const chunks = (g && Array.isArray(g.groundingChunks) ? g.groundingChunks : []).length;
+    return {
+      text: out,
+      finish: String(cand.finishReason || ''),
+      grounded: Boolean(g) && (queries.length > 0 || chunks > 0),
+      queries,
+      model,
+      tools: useTools,
+    };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+// 1차는 검색 도구와 함께, 모델/키가 도구를 막거나(400·404) 검색 할당량이 차면(429)
+// 도구 없이 한 번 더 시도해, 어떤 경우에도 답글이 죽지 않게 합니다.
+async function callGeminiSafe(env, model, systemPrompt, userText, timeoutMs) {
+  try {
+    return await callGemini(env, model, systemPrompt, userText, timeoutMs, true);
+  } catch (err) {
+    const msg = String(err && err.message ? err.message : err);
+    const toolish = /gemini_http_(400|404|429)|google_search|grounding|tool|function[_ ]calling|unsupported/i.test(msg);
+    if (!toolish) throw err;
+    return await callGemini(env, model, systemPrompt, userText, timeoutMs, false);
   }
 }
 
@@ -348,12 +434,28 @@ async function geminiAnswer(env, systemPrompt, userText) {
   let lastErr = null;
   for (const model of models) {
     try {
-      return await callGemini(env, model, systemPrompt, userText, GEMINI_TIMEOUT_MS);
+      return await callGeminiSafe(env, model, systemPrompt, userText, GEMINI_TIMEOUT_MS);
     } catch (err) {
       lastErr = err;
     }
   }
   throw lastErr || new Error('gemini_failed');
+}
+
+// 분량 제한에 걸릴 때 문장 중간에서 끊기지 않도록, 마지막으로 완결된 문장 경계에서 자릅니다.
+function clipComplete(input, max) {
+  const raw = String(input || '').trim();
+  if (raw.length <= max) return raw;
+  const mark = '\n\n(분량 제한으로 여기까지 정리했습니다.)';
+  const room = Math.max(200, max - mark.length);
+  const cut = raw.slice(0, room);
+  let at = -1;
+  for (const ch of ['.', '!', '?', '\n']) {
+    const i = cut.lastIndexOf(ch);
+    if (i > at) at = i;
+  }
+  const done = at > room * 0.5 ? cut.slice(0, at + 1) : cut;
+  return done.replace(/\s+$/, '') + mark;
 }
 
 // ctx.waitUntil 로 띄우는 백그라운드 작업. 어떤 실패도 원래 메시지 저장에는 영향을 주지 않습니다.
@@ -373,17 +475,22 @@ async function runGeminiReply(env, room, trigger) {
 
     const rows = await geminiHistory(env, slug, GEMINI_HISTORY_LIMIT);
     const userText = [
-      '아래는 이 방의 최근 대화 기록입니다. 마지막 메시지에 제미나이로서 바로 답글을 남겨 주세요.',
+      '아래는 이 방의 최근 대화 기록입니다. 마지막 메시지에 제미나이로서 지금 바로 답글을 남깁니다.',
       '',
       geminiTranscript(rows),
       '',
-      `위 마지막 메시지(#${trigger.id}, ${trigger.sender})에 대한 답변:`,
+      `[답변 대상] #${trigger.id} ${trigger.sender}`,
+      '지시·과제가 있으면 결과물을 지금 이 답글 안에 완성해 넣습니다. "하겠습니다"로 끝내지 말고, 다른 팀원 말을 요약하지 말고(새 근거·반론·놓친 리스크 중 하나 이상), 날짜·연도는 위 [현재 시각] 기준으로 씁니다.',
     ].join('\n');
 
-    let answer = await geminiAnswer(env, geminiSystemPrompt(room), userText);
-    answer = String(answer || '').trim();
+    let out = await geminiAnswer(env, geminiSystemPrompt(room), userText);
+    let answer = String((out && out.text) || '').trim();
     if (!answer) return;
-    if (answer.length > GEMINI_MAX_CHARS) answer = answer.slice(0, GEMINI_MAX_CHARS);
+    answer = clipComplete(answer, GEMINI_MAX_CHARS);
+    console.log(
+      `[gemini] model=${out.model} tools=${out.tools} grounded=${out.grounded} finish=${out.finish} chars=${answer.length}` +
+        (out.queries && out.queries.length ? ` queries=${out.queries.join(' | ')}` : '')
+    );
 
     await env.DB.prepare(
       `insert into messages (room_slug, sender, content, reply_to_id, attachment_id, created_at)
@@ -552,8 +659,17 @@ async function handleApi(request, env, url, ctx) {
     const model = url.searchParams.get('model') || env.GEMINI_MODEL || GEMINI_MODELS[0];
     const t0 = Date.now();
     try {
-      const sample = await callGemini(env, model, '진단용 요청입니다. 아주 짧게 답하세요.', '핑', GEMINI_TIMEOUT_MS);
-      return json({ ok: true, model, ms: Date.now() - t0, sample: String(sample).slice(0, 200) });
+      const out = await callGeminiSafe(env, model, geminiSystemPrompt({ name: '진단' }), '지금 날짜와 이 방 이름만 짧게 알려 주세요.', GEMINI_TIMEOUT_MS);
+      return json({
+        ok: true,
+        model: out.model,
+        ms: Date.now() - t0,
+        tools: out.tools,
+        grounded: out.grounded,
+        queries: out.queries,
+        finish: out.finish,
+        sample: String(out.text).slice(0, 300),
+      });
     } catch (err) {
       return json(
         {

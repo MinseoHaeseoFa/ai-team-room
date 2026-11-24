@@ -1,5 +1,5 @@
 /**
- * 쿠사리 AI 팀 회의실 — Cloudflare Pages Functions (advanced mode, _worker.js)
+ * 폴리코드팀 (PolyCode Team) AI 팀 회의실 — Cloudflare Pages Functions (advanced mode, _worker.js)
  *
  * 정적 파일(index.html)은 env.ASSETS 로 서빙하고, /api/* 는 D1(env.DB) 로 처리합니다.
  * 인증: Authorization: Bearer <ROOM_KEY 또는 API_KEY>  (또는 X-Room-Key 헤더, ?key= 쿼리)
@@ -304,11 +304,11 @@ function geminiSystemPrompt(room) {
   const roomDesc = (room && room.description) || '';
   const t = kstNow();
   return [
-    '당신은 쿠사리님(대표)의 "AI 팀 회의실"에 참여한 AI 팀원 "제미나이"입니다.',
+    '당신은 쿠사리님(대표)의 "폴리코드팀(PolyCode Team)" AI 팀 회의실에 참여한 AI 팀원 "제미나이"입니다.',
     `지금 있는 방: ${roomName}${roomDesc ? ` — ${roomDesc}` : ''}`,
     '',
     '역할: 리서치 · 교차검증 · 실무 조언자.',
-    '팀 구성: 쿠사리(대표·총괄 의사결정), 김비서(총괄 AI 비서·실행·배포), 뮤즈(크리에이티브·문서·기획), 제미나이(리서치·교차검증), 클로드(개발·아키텍처).',
+    '팀 구성(폴리코드팀 — 전략·정책·기획·코딩 4축): 쿠사리(대표·총괄 의사결정), 김비서(총괄 AI 비서·실행·배포), 뮤즈(크리에이티브·문서·기획), 제미나이(리서치·교차검증), 클로드(개발·아키텍처).',
     '',
     '[현재 시각 — 요청마다 새로 주입됨. 이 값을 절대값으로 믿고 씁니다]',
     `- 지금은 ${t.ko} 입니다. 오늘 날짜는 ${t.iso}, ${t.year}년입니다.`,
@@ -505,9 +505,9 @@ async function runGeminiReply(env, room, trigger) {
   }
 }
 
-const DOCS_TEMPLATE = `# 쿠사리 AI 팀 회의실 API 사용법
+const DOCS_TEMPLATE = `# 폴리코드팀 (PolyCode Team) AI 팀 회의실 API 사용법
 
-쿠사리님과 AI 팀(김비서·뮤즈·제미나이·클로드)이 한 화면의 방(Room)별로 대화하는 경량 회의실입니다.
+쿠사리님과 AI 팀(김비서·뮤즈·제미나이·클로드)이 한 화면의 방(Room)별로 대화하는 경량 회의실입니다. 팀의 공식 명칭은 **폴리코드팀 (PolyCode Team)** 입니다.
 AI 는 아래 API 로 사람처럼 읽고 쓸 수 있습니다. (Claude Code, Codex, GPT, Gemini, 커스텀 봇 모두 동일)
 
 ## 참여자(역할)
@@ -616,7 +616,7 @@ async function handleApi(request, env, url, ctx) {
       const rooms = await roomList(env);
       return json({
         ok: true,
-        name: '쿠사리 AI 팀 회의실 API',
+        name: '폴리코드팀 (PolyCode Team) AI 팀 회의실 API',
         base_url: url.origin,
         auth: 'Authorization: Bearer <API_KEY> (또는 X-Room-Key: <API_KEY>)',
         rooms: rooms.map((r) => ({ slug: r.slug, name: r.name })),

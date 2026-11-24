@@ -657,9 +657,15 @@ async function handleApi(request, env, url, ctx) {
       }
     }
     const model = url.searchParams.get('model') || env.GEMINI_MODEL || GEMINI_MODELS[0];
+    const toolsParam = url.searchParams.get('tools'); // 1=검색도구 전용 시도, 0=도구 없이, 생략=자동 폴백
     const t0 = Date.now();
     try {
-      const out = await callGeminiSafe(env, model, geminiSystemPrompt({ name: '진단' }), '지금 날짜와 이 방 이름만 짧게 알려 주세요.', GEMINI_TIMEOUT_MS);
+      const prompt = geminiSystemPrompt({ name: '진단' });
+      const userText = '지금 날짜와 이 방 이름만 짧게 알려 주세요.';
+      const out =
+        toolsParam === null
+          ? await callGeminiSafe(env, model, prompt, userText, GEMINI_TIMEOUT_MS)
+          : await callGemini(env, model, prompt, userText, GEMINI_TIMEOUT_MS, toolsParam !== '0');
       return json({
         ok: true,
         model: out.model,

@@ -381,7 +381,7 @@ async function callGemini(env, model, systemPrompt, userText, timeoutMs, useTool
     if (!res.ok) {
       let detail = '';
       try {
-        detail = (await res.text()).slice(0, 600);
+        detail = (await res.text()).slice(0, 1400);
       } catch (e) {
         detail = '';
       }
@@ -682,7 +682,7 @@ async function handleApi(request, env, url, ctx) {
           ok: false,
           model,
           ms: Date.now() - t0,
-          error: String(err && err.message ? err.message : err).slice(0, 500),
+          error: String(err && err.message ? err.message : err).slice(0, 1500),
           hint: 'gemini_http_403/400 이면 키 권한·API 사용 설정, gemini_empty/MISSING 이면 모델명·응답 형식 문제입니다.',
         },
         502

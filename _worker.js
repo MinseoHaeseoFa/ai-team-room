@@ -381,7 +381,7 @@ async function callGemini(env, model, systemPrompt, userText, timeoutMs, useTool
     if (!res.ok) {
       let detail = '';
       try {
-        detail = (await res.text()).slice(0, 200);
+        detail = (await res.text()).slice(0, 600);
       } catch (e) {
         detail = '';
       }

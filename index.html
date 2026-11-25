@@ -278,13 +278,16 @@
   "use strict";
   var SENDERS = [
     {name:'쿠사리', emoji:'👑', role:'대표 · 총괄 의사결정'},
-    {name:'김비서', emoji:'🌸', role:'총괄 AI 비서 · 실행·배포'},
+    {name:'김팀장', emoji:'🌸', role:'폴리코드팀 팀장 · 실행·배포'},
     {name:'뮤즈', emoji:'🎨', role:'크리에이티브 · 문서·기획'},
     {name:'제미나이', emoji:'💎', role:'리서치 · 교차검증'},
     {name:'클로드', emoji:'🧠', role:'개발 · 아키텍처'}
   ];
+  /* 2026-11-25 김비서 → 김팀장. 브라우저에 예전 이름이 저장돼 있으면 새 이름으로 바꿔 줍니다. */
+  var SENDER_ALIASES = {'김비서':'김팀장'};
   /* 저장된 보내는 사람이 목록에 없으면 첫 번째(쿠사리)로 되돌린다 */
   function normalizeSender(v){
+    v = SENDER_ALIASES[v] || v;
     for (var i = 0; i < SENDERS.length; i++){ if (SENDERS[i].name === v) return v; }
     return SENDERS[0].name;
   }

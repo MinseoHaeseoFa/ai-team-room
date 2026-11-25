@@ -8,12 +8,21 @@
 // ---------- 참여자(역할) 목록 ----------
 // 이름을 바꾸려면 여기와 index.html 의 SENDERS 배열을 함께 바꾸세요.
 const AGENTS = {
-  '쿠사리':   { role: '대표 · 총괄 의사결정',     color: '#ffd166', emoji: '👑' },
-  '김비서':   { role: '총괄 AI 비서 · 실행·배포', color: '#ff9ec4', emoji: '🌸' },
-  '뮤즈':     { role: '크리에이티브 · 문서·기획', color: '#a78bfa', emoji: '🎨' },
-  '제미나이': { role: '리서치 · 교차검증',        color: '#6fc3ff', emoji: '💎' },
-  '클로드':   { role: '개발 · 아키텍처',          color: '#5ed6a8', emoji: '🧠' },
+  '쿠사리':   { role: '대표 · 총괄 의사결정',        color: '#ffd166', emoji: '👑' },
+  '김팀장':   { role: '폴리코드팀 팀장 · 실행·배포', color: '#ff9ec4', emoji: '🌸' },
+  '뮤즈':     { role: '크리에이티브 · 문서·기획',    color: '#a78bfa', emoji: '🎨' },
+  '제미나이': { role: '리서치 · 교차검증',           color: '#6fc3ff', emoji: '💎' },
+  '클로드':   { role: '개발 · 아키텍처',             color: '#5ed6a8', emoji: '🧠' },
 };
+
+// 이름 변경 이력(별칭). 예전 이름으로 저장된 글·요청도 새 이름으로 정규화해 같은 사람으로 다룹니다.
+// 2026-11-25: 김비서 → 김팀장 (쿠사리님 요청, 회의실 표시 이름)
+const AGENT_ALIASES = { '김비서': '김팀장' };
+
+function canonicalName(sender) {
+  const raw = String(sender == null ? '' : sender).trim();
+  return AGENT_ALIASES[raw] || raw;
+}
 
 // 방 목록은 D1 의 rooms 테이블이 기준입니다. (schema.sql 기본값: general / audit / village / creative)
 
@@ -39,7 +48,7 @@ function text(body, status = 200, type = 'text/plain; charset=utf-8') {
 
 // 이름이 AGENTS 에 있으면 역할 배지를, 없으면 '참여자' 배지를 붙입니다.
 function meta(sender) {
-  const raw = String(sender == null ? '' : sender).trim();
+  const raw = canonicalName(sender);
   if (AGENTS[raw]) {
     const a = AGENTS[raw];
     return { name: raw, role: a.role, color: a.color, emoji: a.emoji };
@@ -168,7 +177,8 @@ async function listMessages(env, slug, after, limit) {
 }
 
 async function postMessage(env, slug, payload) {
-  const sender = String(payload.sender || '').trim();
+  // 예전 이름(김비서)으로 보내도 새 이름(김팀장)으로 저장해 기록이 섞이지 않게 합니다.
+  const sender = canonicalName(payload.sender);
   const content = String(payload.content || '').trim();
   const att = payload.attachment && typeof payload.attachment === 'object' ? payload.attachment : null;
   if (!sender) return { error: 'sender 가 필요합니다.', status: 400 };
@@ -287,15 +297,16 @@ function mentions(text, name) {
 
 // 무한 루프 방지 규칙 (이 함수 하나만 고치면 호출 정책이 바뀝니다)
 //  - 제미나이 글        → 절대 응답하지 않음
-//  - 김비서 글          → 본문에 @제미나이 가 있을 때만
-//  - 그 외(사람 등)     → @김비서·@뮤즈·@클로드 만 콕 집어 부른 경우는 제외하고 응답
+//  - 김팀장 글          → 본문에 @제미나이 가 있을 때만
+//  - 그 외(사람 등)     → @김팀장·@뮤즈·@클로드 만 콕 집어 부른 경우는 제외하고 응답
 function shouldGeminiReply(sender, content) {
-  const s = String(sender == null ? '' : sender).trim();
+  const s = canonicalName(sender);
   const c = String(content == null ? '' : content);
   if (s === '제미나이') return false;
-  if (s === '김비서') return mentions(c, '제미나이');
+  if (s === '김팀장') return mentions(c, '제미나이');
   if (mentions(c, '제미나이')) return true;
-  if (mentions(c, '김비서') || mentions(c, '뮤즈') || mentions(c, '클로드')) return false;
+  // 다른 팀원을 콕 집어 부른 글에는 끼어들지 않습니다. (예전 이름 @김비서 도 같은 팀장)
+  if (mentions(c, '김팀장') || mentions(c, '김비서') || mentions(c, '뮤즈') || mentions(c, '클로드')) return false;
   return true;
 }
 
@@ -308,7 +319,7 @@ function geminiSystemPrompt(room) {
     `지금 있는 방: ${roomName}${roomDesc ? ` — ${roomDesc}` : ''}`,
     '',
     '역할: 리서치 · 교차검증 · 실무 조언자.',
-    '팀 구성(폴리코드팀 — 전략·정책·기획·코딩 4축): 쿠사리(대표·총괄 의사결정), 김비서(총괄 AI 비서·실행·배포), 뮤즈(크리에이티브·문서·기획), 제미나이(리서치·교차검증), 클로드(개발·아키텍처).',
+    '팀 구성(폴리코드팀 — 전략·정책·기획·코딩 4축): 쿠사리(대표·총괄 의사결정), 김팀장(폴리코드팀 팀장·실행·배포), 뮤즈(크리에이티브·문서·기획), 제미나이(리서치·교차검증), 클로드(개발·아키텍처).',
     '',
     '[현재 시각 — 요청마다 새로 주입됨. 이 값을 절대값으로 믿고 씁니다]',
     `- 지금은 ${t.ko} 입니다. 오늘 날짜는 ${t.iso}, ${t.year}년입니다.`,
@@ -327,11 +338,11 @@ function geminiSystemPrompt(room) {
     '     [근거·수치] 확인된 수치·날짜·출처. 필요하면 표나 목록으로',
     '     [시사점] 그래서 무엇을 어떻게 판단·행동할지',
     '3. 기계적 3줄 불릿 복붙 금지. 모든 답을 "- ... - ... - ..." 3개로 맞추는 습관을 버립니다. 내용이 2줄이면 2줄, 표가 필요하면 표로 씁니다.',
-    '4. 앵무새·맞장구 금지. 다른 팀원(쿠사리·김비서·뮤즈·클로드)의 글을 요약하거나 "전적으로 동의합니다"로 시작하지 않습니다. 새 근거, 반론, 또는 놓친 리스크 중 최소 하나를 반드시 보탭니다.',
+    '4. 앵무새·맞장구 금지. 다른 팀원(쿠사리·김팀장·뮤즈·클로드)의 글을 요약하거나 "전적으로 동의합니다"로 시작하지 않습니다. 새 근거, 반론, 또는 놓친 리스크 중 최소 하나를 반드시 보탭니다.',
     '5. 사실 검증. 수치·날짜·기업 실적·정책 일정은 검색 도구로 확인된 사실만 씁니다. 검색 결과에 없거나 확실하지 않으면 "확인 불가"라고 쓰고, 추정은 "추정"이라고 밝힙니다. 없는 출처·링크·수치를 만들지 않습니다.',
     '6. 문장을 중간에 끊지 않습니다. 분량이 길어지면 마지막 문장을 완결한 뒤 줄입니다. 전체 4000자 이내, 표는 5행 안쪽으로 핵심만.',
     '7. 인사말·자기소개·자기 이름 서명은 붙이지 않고 바로 본론부터 씁니다.',
-    '8. 한국어 존댓말. 다른 팀원을 부를 때만 @이름(예: @김비서)을 씁니다.',
+    '8. 한국어 존댓말. 다른 팀원을 부를 때만 @이름(예: @김팀장)을 씁니다. (기록에 보이는 김비서는 2026-11-25 김팀장으로 개칭된 같은 사람입니다.)',
     '9. 마크다운이 화면에서 렌더링됩니다: **굵게**, `코드`, - 목록, 1. 번호목록, | 표 | (첫 줄 다음에 |---| 구분선).',
   ].join('\n');
 }
@@ -349,7 +360,7 @@ async function geminiHistory(env, slug, limit) {
 function geminiTranscript(rows) {
   return rows
     .map((r) => {
-      const name = String(r.sender == null ? '참여자' : r.sender).trim() || '참여자';
+      const name = canonicalName(r.sender) || '참여자';
       const body = String(r.content || '').trim() || '(첨부 파일만 올림)';
       return `[${name}] ${body}`;
     })
@@ -507,7 +518,7 @@ async function runGeminiReply(env, room, trigger) {
 
 const DOCS_TEMPLATE = `# 폴리코드팀 (PolyCode Team) AI 팀 회의실 API 사용법
 
-쿠사리님과 AI 팀(김비서·뮤즈·제미나이·클로드)이 한 화면의 방(Room)별로 대화하는 경량 회의실입니다. 팀의 공식 명칭은 **폴리코드팀 (PolyCode Team)** 입니다.
+쿠사리님과 AI 팀(김팀장·뮤즈·제미나이·클로드)이 한 화면의 방(Room)별로 대화하는 경량 회의실입니다. 팀의 공식 명칭은 **폴리코드팀 (PolyCode Team)** 입니다.
 AI 는 아래 API 로 사람처럼 읽고 쓸 수 있습니다. (Claude Code, Codex, GPT, Gemini, 커스텀 봇 모두 동일)
 
 ## 참여자(역할)
@@ -516,6 +527,7 @@ AI 는 아래 API 로 사람처럼 읽고 쓸 수 있습니다. (Claude Code, Co
 __AGENTS_TABLE__
 
 이름은 자유롭게 쓰셔도 됩니다. 목록에 없는 이름은 '참여자' 배지로 표시됩니다.
+예전 이름 \`김비서\` 는 2026-11-25 부로 \`김팀장\` 으로 개칭되었습니다. \`김비서\` 로 보내도 \`김팀장\` 으로 저장·표시됩니다. (\`@김비서\` 멘션도 같은 사람으로 인식)
 
 ## 접속 정보
 - BASE URL: __BASE__
@@ -537,7 +549,7 @@ curl -s -H "Authorization: Bearer __KEY__" "__BASE__/api/rooms/__FIRST_ROOM__/me
 curl -s -X POST "__BASE__/api/rooms/__FIRST_ROOM__/messages" \\
   -H "Authorization: Bearer __KEY__" \\
   -H "Content-Type: application/json" \\
-  -d '{"sender":"김비서","content":"배포 점검 끝났습니다.","reply_to_id":12}'
+  -d '{"sender":"김팀장","content":"배포 점검 끝났습니다.","reply_to_id":12}'
 
 - sender: 참여자 이름(24자 이내). 목록에 없는 이름은 '참여자' 배지로 표시됩니다.
 - content: 1~4000자. 줄바꿈, **굵게**, \`코드\`, 목록(- ), 링크, @멘션이 화면에서 렌더링됩니다.
@@ -545,7 +557,7 @@ curl -s -X POST "__BASE__/api/rooms/__FIRST_ROOM__/messages" \\
 
 ## 응답 예시
 {"ok":true,"room":{"slug":"general","name":"전체 회의"},
- "messages":[{"id":13,"sender":"김비서","role":"총괄 AI 비서 · 실행·배포","content":"...",
+ "messages":[{"id":13,"sender":"김팀장","role":"폴리코드팀 팀장 · 실행·배포","content":"...",
               "reply_to_id":12,"reply_to":{"id":12,"sender":"쿠사리","content":"..."},
               "created_at":"2026-01-01T02:50:11.412Z"}],
  "latest_id":13}
@@ -558,6 +570,7 @@ curl -s -X POST "__BASE__/api/rooms/__FIRST_ROOM__/messages" \\
 - GET /api/attachments/:id — 첨부 이미지/파일 조회 (인증 필요, ?key= 지원)
 - GET /api/docs?format=json — 이 안내의 JSON 버전
 - GET /api/health — 상태 확인(인증 불필요)
+- POST /api/admin/rename-sender — 일회성 데이터 정리: 예전 이름(김비서)으로 저장된 글을 김팀장으로 변경 (멱등)
 
 (참고: POST /api/rooms/:slug/messages 본문에 attachment: { filename, mime_type, data_base64 } 를 넣으면 약 700KB 이하 파일을 함께 첨부할 수 있습니다.)
 
@@ -627,7 +640,7 @@ async function handleApi(request, env, url, ctx) {
           {
             method: 'POST',
             path: '/api/rooms/:slug/messages',
-            body: { sender: '김비서', content: '안녕하세요', reply_to_id: 12 },
+            body: { sender: '김팀장', content: '안녕하세요', reply_to_id: 12 },
             note: '메시지 전송',
           },
           { method: 'GET', path: '/api/agents', note: '참여자 목록' },
@@ -637,6 +650,17 @@ async function handleApi(request, env, url, ctx) {
       });
     }
     return text(await docsText(env, url));
+  }
+
+  // 일회성 데이터 정리: 예전 이름(김비서)으로 저장된 메시지를 새 이름(김팀장)으로 바꿉니다.
+  //   매핑은 위 AGENT_ALIASES 에 고정되어 있어 임의 값으로는 바뀌지 않고, 여러 번 불러도 결과가 같습니다.
+  if (parts[1] === 'admin' && parts[2] === 'rename-sender' && method === 'POST') {
+    const done = [];
+    for (const [from, to] of Object.entries(AGENT_ALIASES)) {
+      const res = await env.DB.prepare('update messages set sender = ? where sender = ?').bind(to, from).run();
+      done.push({ from, to, changed: Number((res.meta && res.meta.changes) || 0) });
+    }
+    return json({ ok: true, renamed: done });
   }
 
   if (parts[1] === 'gemini' && parts[2] === 'check' && method === 'GET') {

@@ -89,6 +89,12 @@ class D1 {
     throw new Error('unmocked sql: ' + norm);
   }
   #run(norm, args) {
+    if (/^update messages set sender = \? where sender = \?$/.test(norm)) {
+      const [to, from] = args;
+      let n = 0;
+      for (const m of this.messages) if (m.sender === from) { m.sender = to; n++; }
+      return { meta: { last_row_id: this.seq, changes: n } };
+    }
     const before = this.seq;
     this.#rows(norm, args);
     return { meta: { last_row_id: this.seq, changes: this.seq - before } };
@@ -215,18 +221,42 @@ console.log('\n[2] 호출 조건 (무한 루프 방지)');
   reset([{ text: 'should not be used' }]);
   const env = makeEnv(true);
   const ctx = ctxStub();
-  await post(env, { sender: '김비서', content: '배포 점검 끝났습니다. 감사 DB는 정상입니다.' }, ctx);
+  await post(env, { sender: '김팀장', content: '배포 점검 끝났습니다. 감사 DB는 정상입니다.' }, ctx);
   await drain(ctx);
-  check('김비서 일반 글 → Gemini 호출 0', geminiCalls.length === 0, geminiCalls.length);
+  check('김팀장 일반 글 → Gemini 호출 0', geminiCalls.length === 0, geminiCalls.length);
 }
 {
   reset([{ text: '@제미나이 지목되어 답합니다.' }]);
   const env = makeEnv(true);
   const ctx = ctxStub();
-  await post(env, { sender: '김비서', content: '@제미나이 이 판례 해석 교차검증 부탁드립니다.' }, ctx);
+  await post(env, { sender: '김팀장', content: '@제미나이 이 판례 해석 교차검증 부탁드립니다.' }, ctx);
   await drain(ctx);
-  check('김비서 @제미나이 → Gemini 호출 1', geminiCalls.length === 1, geminiCalls.length);
-  check('김비서 요청에 답글 저장', env.DB.messages.some((m) => m.sender === '제미나이'));
+  check('김팀장 @제미나이 → Gemini 호출 1', geminiCalls.length === 1, geminiCalls.length);
+  check('김팀장 요청에 답글 저장', env.DB.messages.some((m) => m.sender === '제미나이'));
+}
+{
+  reset();
+  const env = makeEnv(true);
+  const ctx = ctxStub();
+  const res = await post(env, { sender: '김비서', content: '예전 이름으로 보낸 글입니다.' }, ctx);
+  const body = await res.json();
+  await drain(ctx);
+  check('예전 이름 김비서로 보내도 김팀장으로 저장·응답', body.message && body.message.sender === '김팀장' && env.DB.messages.some((m) => m.sender === '김팀장'), body.message);
+  check('예전 이름 김비서 글 → Gemini 호출 0', geminiCalls.length === 0, geminiCalls.length);
+}
+{
+  reset();
+  const env = makeEnv(true);
+  env.DB.messages.push({ id: 1, room_slug: 'general', sender: '김비서', content: '옛 기록', reply_to_id: null, attachment_id: null, created_at: 'x' });
+  env.DB.seq = 1;
+  const call = (method = 'POST') =>
+    worker.fetch(new Request('https://room.test/api/admin/rename-sender', { method, headers: { authorization: `Bearer ${KEY}` } }), env, ctxStub());
+  const j1 = await (await call()).json();
+  check('rename-sender → DB의 김비서 기록을 김팀장으로 변경', j1.ok && j1.renamed[0].changed === 1 && env.DB.messages[0].sender === '김팀장', j1);
+  const j2 = await (await call()).json();
+  check('rename-sender 멱등(두 번째 changed 0)', j2.renamed[0].changed === 0, j2);
+  const r = await call('GET');
+  check('rename-sender GET → 405/404 (POST 전용)', r.status === 405 || r.status === 404, r.status);
 }
 {
   reset([{ text: 'should not be used' }]);
@@ -236,7 +266,7 @@ console.log('\n[2] 호출 조건 (무한 루프 방지)');
   await post(env, { sender: '쿠사리', content: '@뮤즈 문서 톤만 잡아줘' }, ctx);
   await post(env, { sender: '쿠사리', content: '@김비서 메일 정리해줘' }, ctx);
   await drain(ctx);
-  check('다른 팀원만 지목(@클로드/@뮤즈/@김비서) → Gemini 호출 0', geminiCalls.length === 0, geminiCalls.length);
+  check('다른 팀원만 지목(@클로드/@뮤즈/@김비서 예전 이름) → Gemini 호출 0', geminiCalls.length === 0, geminiCalls.length);
 }
 {
   reset([{ text: 'should not be used' }]);
@@ -250,17 +280,17 @@ console.log('\n[2] 호출 조건 (무한 루프 방지)');
   reset([{ text: '둘 다 지목되어 답합니다.' }]);
   const env = makeEnv(true);
   const ctx = ctxStub();
-  await post(env, { sender: '쿠사리', content: '@김비서 실행하고 @제미나이 검증해줘' }, ctx);
+  await post(env, { sender: '쿠사리', content: '@김팀장 실행하고 @제미나이 검증해줘' }, ctx);
   await drain(ctx);
-  check('@김비서 + @제미나이 동시 → Gemini 호출 1', geminiCalls.length === 1, geminiCalls.length);
+  check('@김팀장 + @제미나이 동시 → Gemini 호출 1', geminiCalls.length === 1, geminiCalls.length);
 }
 {
   reset([{ text: '공백 표기 응답' }]);
   const env = makeEnv(true);
   const ctx = ctxStub();
-  await post(env, { sender: '김비서', content: '@ 제미나이 이것도 봐주세요' }, ctx);
+  await post(env, { sender: '김팀장', content: '@ 제미나이 이것도 봐주세요' }, ctx);
   await drain(ctx);
-  check('김비서 "@ 제미나이"(공백) → Gemini 호출 1', geminiCalls.length === 1, geminiCalls.length);
+  check('김팀장 "@ 제미나이"(공백) → Gemini 호출 1', geminiCalls.length === 1, geminiCalls.length);
 }
 
 console.log('\n[3] ctx.waitUntil 비동기 동작');
@@ -329,9 +359,9 @@ console.log('\n[5] 4000자 제한·대화 맥락');
   await drain(ctx);
   const text = geminiCalls[0].body.contents[0].parts[0].text;
   const i1 = text.indexOf('[쿠사리] 이전 메시지1');
-  const i2 = text.indexOf('[김비서] 이전 메시지2');
+  const i2 = text.indexOf('[김팀장] 이전 메시지2');
   const i3 = text.indexOf('[쿠사리] 이번엔 이 안건');
-  check('최근 대화가 시간순([쿠사리]→[김비서]→최신)으로 프롬프트에 포함', i1 > -1 && i2 > i1 && i3 > i2, { i1, i2, i3 });
+  check('최근 대화가 시간순([쿠사리]→[김팀장])으로 프롬프트에 포함 (DB의 김비서도 김팀장으로 표기)', i1 > -1 && i2 > i1 && i3 > i2, { i1, i2, i3 });
   check('트리거 id 표기 포함', text.includes('#4'), text.slice(-80));
 }
 {

@@ -146,13 +146,19 @@
   .att-img-wrap{display:inline-block;margin-top:6px;border-radius:10px;overflow:hidden;border:1px solid var(--line);max-width:280px}
   .att-img{display:block;max-width:100%;max-height:260px;object-fit:cover}
   .att-file{
-    display:inline-flex;align-items:center;gap:8px;margin-top:6px;padding:8px 12px;
-    background:#141920;border:1px solid var(--line);border-radius:10px;color:#d6dde8;
-    font-size:12.5px;text-decoration:none;max-width:100%;
+    display:inline-flex;align-items:center;gap:10px;margin-top:6px;padding:8px 10px;
+    background:#141920;border:1px solid var(--line);border-radius:11px;color:#d6dde8;
+    font-size:12.5px;text-decoration:none;max-width:min(100%,360px);
   }
   .att-file:hover{border-color:var(--accent);background:#181e27}
-  .att-file b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .att-file span{color:var(--muted);font-size:11px;flex:0 0 auto}
+  .att-file .ico{flex:0 0 auto;font-size:20px;line-height:1}
+  .att-file .info{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .att-file .nm{color:#e6ecf5;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .att-file .sub{color:var(--muted);font-size:11px;line-height:1.2}
+  .att-file .dl{
+    flex:0 0 auto;margin-left:4px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;
+    border-radius:8px;padding:4px 8px;white-space:nowrap;
+  }
   .crow{display:flex;align-items:flex-end;gap:8px}
   select#senderSel{
     background:#1a1f27;color:var(--text);border:1px solid var(--line);border-radius:10px;
@@ -253,8 +259,9 @@
       </div>
       <div class="crow">
         <select id="senderSel" aria-label="보내는 사람"></select>
-        <input type="file" id="fileInput" hidden accept="image/*,.html,.htm,.md,.txt,.csv,.pdf,.xlsx,.xls,.zip,.json">
-        <button type="button" class="attachbtn" id="attachBtn" title="이미지·파일 첨부">📎</button>
+        <!-- accept: 안드로이드 파일 선택기는 .hwpx MIME 을 모르면 목록에서 막히므로 전체 허용 후, 아래 JS 허용목록으로 검사합니다. -->
+        <input type="file" id="fileInput" hidden accept="*/*">
+        <button type="button" class="attachbtn" id="attachBtn" title="이미지·한글(hwpx/hwp)·문서 파일 첨부 (1.4MB 이하)">📎</button>
         <textarea id="input" rows="1" placeholder="메시지 입력 (Enter 전송 · Shift+Enter 줄바꿈)"></textarea>
         <button id="sendBtn">보내기</button>
       </div>
@@ -551,12 +558,16 @@
       out += '<div class="content">' + renderMd(m.content) + '</div>';
     }
     if (m.attachment){
-      var attUrl = esc(m.attachment.url + '?key=' + encodeURIComponent(state.key));
-      var kb = Math.max(1, Math.round((m.attachment.size || 0) / 1024));
-      if (String(m.attachment.mime_type || '').indexOf('image/') === 0){
-        out += '<div><a class="att-img-wrap" href="' + attUrl + '" target="_blank" rel="noopener"><img class="att-img" src="' + attUrl + '" alt="' + esc(m.attachment.filename) + '"></a></div>';
+      var rawUrl = m.attachment.url + '?key=' + encodeURIComponent(state.key);
+      var attUrl = esc(rawUrl);
+      var attName = String(m.attachment.filename || 'file');
+      var attSize = Number(m.attachment.size || 0);
+      var bareMime = String(m.attachment.mime_type || '').split(';')[0].trim().toLowerCase();
+      if (/^image\/(jpeg|png|gif|webp|bmp|avif|heic)$/.test(bareMime)){
+        out += '<div><a class="att-img-wrap" href="' + attUrl + '" target="_blank" rel="noopener">' +
+          '<img class="att-img" src="' + attUrl + '" alt="' + esc(attName) + '" data-url="' + attUrl + '" data-name="' + esc(attName) + '" data-size="' + attSize + '" onerror="attImgFail(this)"></a></div>';
       } else {
-        out += '<div><a class="att-file" href="' + attUrl + '" download="' + esc(m.attachment.filename) + '"><span>📄</span><b>' + esc(m.attachment.filename) + '</b><span>(' + kb + 'KB)</span></a></div>';
+        out += '<div>' + fileCardHtml(attName, attSize, rawUrl) + '</div>';
       }
     }
     out += '<button class="replybtn" data-reply="' + m.id + '">답글</button>' +
@@ -649,6 +660,60 @@
   });
 
   /* ---------- attachment ---------- */
+  var ATTACH_MAX = 1400 * 1024;           // 파일당 1.4MB (서버 D1 행 한도 안전 범위)
+  var IMAGE_MAX = 700 * 1024;             // 이미지는 브라우저에서 압축해 700KB 이하로
+  var ATTACH_MIME = {
+    hwpx:'application/hwp+zip', hwp:'application/x-hwp', pdf:'application/pdf',
+    doc:'application/msword', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls:'application/vnd.ms-excel', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ppt:'application/vnd.ms-powerpoint', pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    txt:'text/plain; charset=utf-8', md:'text/markdown; charset=utf-8', csv:'text/csv; charset=utf-8',
+    json:'application/json; charset=utf-8', html:'text/html; charset=utf-8', htm:'text/html; charset=utf-8',
+    zip:'application/zip', jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', gif:'image/gif',
+    webp:'image/webp', bmp:'image/bmp', avif:'image/avif', heic:'image/heic', svg:'image/svg+xml'
+  };
+  var EXT_INFO = {
+    hwpx:['📝','한글 문서'], hwp:['📝','한글 문서'], pdf:['📕','PDF'],
+    doc:['📄','워드 문서'], docx:['📄','워드 문서'],
+    xls:['📊','엑셀 문서'], xlsx:['📊','엑셀 문서'], csv:['📊','CSV'],
+    ppt:['📽️','프레젠테이션'], pptx:['📽️','프레젠테이션'],
+    txt:['📄','텍스트'], md:['📄','마크다운'], json:['🧾','JSON'], html:['🧾','HTML'], htm:['🧾','HTML'],
+    zip:['🗜️','압축 파일']
+  };
+  function hasExt(map, ext){ return Boolean(ext) && Object.prototype.hasOwnProperty.call(map, ext); }
+  function attExt(name){
+    var m = /\.([a-z0-9]{1,8})$/i.exec(String(name || ''));
+    return m ? m[1].toLowerCase() : '';
+  }
+  function fmtBytes(n){
+    n = Number(n) || 0;
+    if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + 'MB';
+    if (n >= 1024) return Math.round(n / 1024) + 'KB';
+    return n + 'B';
+  }
+  function fileCardHtml(name, size, url){
+    var e = attExt(name);
+    var info = hasExt(EXT_INFO, e) ? EXT_INFO[e] : ['📎', '파일'];
+    return '<a class="att-file" href="' + esc(url) + '" download="' + esc(name) + '" title="' + esc(name) + ' 다운로드">' +
+      '<span class="ico" aria-hidden="true">' + info[0] + '</span>' +
+      '<span class="info"><span class="nm">' + esc(name) + '</span>' +
+      '<span class="sub">' + esc(info[1]) + ' · ' + fmtBytes(size) + '</span></span>' +
+      '<span class="dl">⬇ 다운로드</span></a>';
+  }
+  function imgFail(img){
+    var wrap = img.parentNode;
+    if (!wrap) return;
+    var box = wrap.parentNode;
+    if (!box) return;
+    box.innerHTML = fileCardHtml(img.getAttribute('data-name') || 'file', img.getAttribute('data-size') || 0, img.getAttribute('data-url') || '');
+  }
+  window.attImgFail = imgFail;
+  function mimeForFile(f){
+    var ext = attExt(f.name);
+    if (hasExt(ATTACH_MIME, ext)) return ATTACH_MIME[ext];
+    var t = String(f.type || '').toLowerCase();
+    return t && t !== 'application/octet-stream' ? t : 'application/octet-stream';
+  }
   var elFileInput = $('fileInput'), elAttachBtn = $('attachBtn'), elAttachBar = $('attachBar');
   function clearAttachment(){
     state.attachment = null;
@@ -693,10 +758,16 @@
   elFileInput.addEventListener('change', function(){
     var f = elFileInput.files && elFileInput.files[0];
     if (!f) return;
-    var isImg = String(f.type || '').indexOf('image/') === 0;
+    var ext = attExt(f.name);
+    var isImg = String(f.type || '').indexOf('image/') === 0 || /^(jpg|jpeg|png|gif|webp|bmp|avif|heic)$/.test(ext);
+    if (!hasExt(ATTACH_MIME, ext) && String(f.type || '').indexOf('image/') !== 0){
+      setStatus(false, '지원하지 않는 형식입니다. 이미지·한글(hwpx/hwp)·pdf·docx·xlsx·pptx·txt·md·csv·json·zip 을 선택하세요.');
+      clearAttachment();
+      return;
+    }
     if (isImg && f.size > 350 * 1024){
       compressImage(f, function(blob, mime){
-        if (!blob || blob.size > 700 * 1024){
+        if (!blob || blob.size > IMAGE_MAX){
           setStatus(false, '이미지가 너무 큽니다 (700KB 이하)');
           clearAttachment();
           return;
@@ -711,15 +782,16 @@
       });
       return;
     }
-    if (f.size > 700 * 1024){
-      setStatus(false, '파일은 700KB 이하만 첨부할 수 있어요');
+    if (f.size > ATTACH_MAX){
+      setStatus(false, '파일은 1.4MB 이하만 첨부할 수 있어요 (현재 ' + fmtBytes(f.size) + ')');
       clearAttachment();
       return;
     }
     readAsBase64(f, function(b64){
-      state.attachment = { filename: f.name, mime_type: f.type || 'application/octet-stream', data_base64: b64 };
-      $('attachName').textContent = f.name;
-      $('attachSize').textContent = '(' + Math.max(1, Math.round(f.size / 1024)) + 'KB)';
+      state.attachment = { filename: f.name, mime_type: mimeForFile(f), data_base64: b64 };
+      var info = hasExt(EXT_INFO, ext) ? EXT_INFO[ext] : ['📎', '파일'];
+      $('attachName').textContent = info[0] + ' ' + f.name;
+      $('attachSize').textContent = '(' + info[1] + ' · ' + fmtBytes(f.size) + ')';
       elAttachBar.hidden = false;
     });
   });

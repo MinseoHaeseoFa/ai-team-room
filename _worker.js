@@ -24,6 +24,83 @@ function canonicalName(sender) {
   return AGENT_ALIASES[raw] || raw;
 }
 
+// ---------- 첨부 파일 ----------
+// 2026-11-27: 이미지 위주 제한을 풀고 한글(hwpx/hwp)·오피스 문서를 함께 받습니다.
+// 크기는 D1 행 크기 한도(2MB) 안에서 여유 있게 1.4MB 로 둡니다(브라우저는 base64 로 보내므로 약 1.25배가 됩니다).
+const ATTACH_MAX_BYTES = Math.floor(1.4 * 1024 * 1024);
+const ATTACH_MAX_B64_CHARS = Math.ceil(ATTACH_MAX_BYTES / 3) * 4 + 64;
+
+// 확장자 → MIME. 브라우저·OS 마다 .hwpx 의 type 이 비어 있거나 octet-stream 으로 오기 때문에 서버가 확장자로 정규화합니다.
+const MIME_BY_EXT = Object.freeze({
+  hwpx: 'application/hwp+zip',
+  hwp: 'application/x-hwp',
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain; charset=utf-8',
+  md: 'text/markdown; charset=utf-8',
+  csv: 'text/csv; charset=utf-8',
+  json: 'application/json; charset=utf-8',
+  html: 'text/html; charset=utf-8',
+  htm: 'text/html; charset=utf-8',
+  zip: 'application/zip',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  avif: 'image/avif',
+  heic: 'image/heic',
+  svg: 'image/svg+xml',
+});
+
+function fileExt(name) {
+  const m = /\.([a-z0-9]{1,8})$/i.exec(String(name == null ? '' : name).trim());
+  return m ? m[1].toLowerCase() : '';
+}
+
+function hasMimeForExt(ext) {
+  return Boolean(ext) && Object.prototype.hasOwnProperty.call(MIME_BY_EXT, ext);
+}
+
+// 파일명에서 경로 구분자·제어문자를 지우고 길이를 자릅니다. (다운로드 헤더 인젝션 방지)
+function cleanFilename(name) {
+  let s = String(name == null ? '' : name).replace(/[\\/\u0000-\u001f\u007f]/g, '_').replace(/^\.+/, '_').trim();
+  if (!s) s = 'file';
+  return s.slice(0, 180);
+}
+
+// 확장자 기준 MIME 이 있으면 그것을, 없으면 클라이언트가 준 MIME 을 씁니다.
+function mimeForFile(filename, given) {
+  const ext = fileExt(filename);
+  if (hasMimeForExt(ext)) return MIME_BY_EXT[ext];
+  const m = String(given == null ? '' : given).split(';')[0].trim().toLowerCase();
+  return m && m !== 'application/octet-stream' ? m : 'application/octet-stream';
+}
+
+// 허용 규칙: 확장자가 목록에 있거나, 확장자가 없어도 image/* MIME 이면 허용.
+function isAllowedAttachment(filename, given) {
+  if (hasMimeForExt(fileExt(filename))) return true;
+  const m = String(given == null ? '' : given).split(';')[0].trim().toLowerCase();
+  return m.startsWith('image/');
+}
+
+// RFC 5987 파일명(한글 파일명이 브라우저에서 깨지지 않게)
+function rfc5987(s) {
+  return encodeURIComponent(String(s)).replace(/['()*!]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
+function contentDisposition(filename, inline) {
+  const safe = String(filename || 'file').replace(/[\r\n"]/g, '_');
+  const ascii = safe.replace(/[^\x20-\x7e]/g, '_') || 'file';
+  return (inline ? 'inline' : 'attachment') + '; filename="' + ascii + '"; filename*=UTF-8\'\'' + rfc5987(safe);
+}
+
 // 방 목록은 D1 의 rooms 테이블이 기준입니다. (schema.sql 기본값: general / audit / village / creative)
 
 const PALETTE = ['#ff5c8a', '#6fc3ff', '#f0b070', '#a78bfa', '#5ed6a8', '#ffd166', '#ff8b6b', '#8fb8ff'];
@@ -188,14 +265,29 @@ async function postMessage(env, slug, payload) {
 
   let attachmentId = null;
   if (att) {
-    const filename = String(att.filename || 'file').trim().slice(0, 180) || 'file';
-    const mimeType = String(att.mime_type || 'application/octet-stream').trim().slice(0, 120) || 'application/octet-stream';
-    let b64 = String(att.data_base64 || '').trim();
+    const filename = cleanFilename(att.filename);
+    const givenMime = String(att.mime_type == null ? '' : att.mime_type).trim().slice(0, 120);
+    if (!isAllowedAttachment(filename, givenMime)) {
+      const ext = fileExt(filename);
+      return {
+        error: `지원하지 않는 파일 형식입니다${ext ? ' (.' + ext + ')' : ''}. 이미지·한글(hwpx/hwp)·pdf·docx·xlsx·pptx·txt·md·csv·json·html·zip 만 첨부할 수 있습니다.`,
+        status: 415,
+      };
+    }
+    const mimeType = mimeForFile(filename, givenMime);
+    let b64 = String(att.data_base64 || '').replace(/\s+/g, '');
     const commaIdx = b64.indexOf(',');
     if (b64.startsWith('data:') && commaIdx !== -1) b64 = b64.slice(commaIdx + 1);
     if (!b64) return { error: 'attachment.data_base64 가 필요합니다.', status: 400 };
-    if (b64.length > 980000) return { error: '첨부 파일은 약 700KB 이하만 가능합니다.', status: 413 };
+    while (b64.length % 4 !== 0) b64 += '=';
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) return { error: 'attachment.data_base64 형식이 올바르지 않습니다.', status: 400 };
+    if (b64.length > ATTACH_MAX_B64_CHARS) {
+      return { error: `첨부 파일은 1.4MB 이하만 가능합니다. (현재 약 ${Math.round((b64.length * 3) / 4 / 1024)}KB)`, status: 413 };
+    }
     const size = Math.floor((b64.length * 3) / 4) - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0);
+    if (size > ATTACH_MAX_BYTES) {
+      return { error: `첨부 파일은 1.4MB 이하만 가능합니다. (현재 약 ${Math.round(size / 1024)}KB)`, status: 413 };
+    }
     const attRes = await env.DB.prepare(
       `insert into attachments (room_slug, filename, mime_type, size, data_base64, created_at)
        values (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
@@ -567,12 +659,18 @@ curl -s -X POST "__BASE__/api/rooms/__FIRST_ROOM__/messages" \\
 
 ## 그 밖의 엔드포인트
 - GET /api/agents — 참여자 목록
-- GET /api/attachments/:id — 첨부 이미지/파일 조회 (인증 필요, ?key= 지원)
+- GET /api/attachments/:id — 첨부 이미지/파일 조회 (인증 필요, ?key= 지원, ?download=1 이면 강제 다운로드)
 - GET /api/docs?format=json — 이 안내의 JSON 버전
 - GET /api/health — 상태 확인(인증 불필요)
 - POST /api/admin/rename-sender — 일회성 데이터 정리: 예전 이름(김비서)으로 저장된 글을 김팀장으로 변경 (멱등)
+- POST /api/admin/delete-message — 관리용: {"id":123} 메시지와 첨부 삭제 (API 키 필요)
 
-(참고: POST /api/rooms/:slug/messages 본문에 attachment: { filename, mime_type, data_base64 } 를 넣으면 약 700KB 이하 파일을 함께 첨부할 수 있습니다.)
+## 4) 파일 첨부
+POST /api/rooms/:slug/messages 본문에 attachment: { filename, mime_type, data_base64 } 를 넣으면 파일을 함께 보낼 수 있습니다.
+- 허용: 이미지(jpg/png/gif/webp/svg 등), 한글(hwpx/hwp), pdf, docx, xlsx, pptx, txt, md, csv, json, html, zip
+- 크기: 파일당 1.4MB 이하 (base64 로 인코딩해 보냅니다. 이미지 화면 첨부는 자동 압축)
+- mime_type 은 비워도 됩니다. 서버가 확장자로 정확한 형식을 정합니다(.hwpx → application/hwp+zip).
+- 받은 파일은 GET /api/attachments/:id 로 내려받고, Content-Disposition 에 원래 파일명(한글 포함)이 들어갑니다.
 
 ## 주의
 - 메시지는 회의실 DB 에 남고 참여자 모두가 읽습니다.
@@ -644,6 +742,7 @@ async function handleApi(request, env, url, ctx) {
             note: '메시지 전송',
           },
           { method: 'GET', path: '/api/agents', note: '참여자 목록' },
+          { method: 'GET', path: '/api/attachments/:id', note: '첨부 다운로드(?key= 또는 Authorization, ?download=1 강제 다운로드)' },
           { method: 'GET', path: '/api/health', note: '상태 확인(인증 불필요)' },
         ],
         note: 'python-urllib 등 기본 User-Agent 는 Cloudflare 가 403으로 막는 경우가 있습니다. UA 를 지정하세요.',
@@ -654,6 +753,31 @@ async function handleApi(request, env, url, ctx) {
 
   // 일회성 데이터 정리: 예전 이름(김비서)으로 저장된 메시지를 새 이름(김팀장)으로 바꿉니다.
   //   매핑은 위 AGENT_ALIASES 에 고정되어 있어 임의 값으로는 바뀌지 않고, 여러 번 불러도 결과가 같습니다.
+  // 관리용: 잘못 올린 메시지(와 그 첨부)를 지웁니다. API 키(ROOM_KEY/API_KEY)가 있어야 하며,
+  // 다른 메시지가 참조하지 않는 첨부만 함께 지웁니다.
+  if (parts[1] === 'admin' && parts[2] === 'delete-message' && method === 'POST') {
+    let body = null;
+    try {
+      body = await request.json();
+    } catch (e) {
+      body = null;
+    }
+    const id = parseInt(body && body.id, 10);
+    if (!Number.isFinite(id) || id <= 0) return json({ ok: false, error: 'invalid_id', message: '삭제할 메시지 id 가 필요합니다.' }, 400);
+    const row = await env.DB.prepare('select id, room_slug, attachment_id from messages where id = ?').bind(id).first();
+    if (!row) return json({ ok: false, error: 'not_found', message: `메시지 ${id} 가 없습니다.` }, 404);
+    await env.DB.prepare('delete from messages where id = ?').bind(id).run();
+    let attachmentDeleted = false;
+    if (row.attachment_id) {
+      const used = await env.DB.prepare('select count(*) as n from messages where attachment_id = ?').bind(row.attachment_id).first();
+      if (!used || Number(used.n) === 0) {
+        await env.DB.prepare('delete from attachments where id = ?').bind(row.attachment_id).run();
+        attachmentDeleted = true;
+      }
+    }
+    return json({ ok: true, deleted: { id, room: row.room_slug, attachment_deleted: attachmentDeleted } });
+  }
+
   if (parts[1] === 'admin' && parts[2] === 'rename-sender' && method === 'POST') {
     const done = [];
     for (const [from, to] of Object.entries(AGENT_ALIASES)) {
@@ -735,14 +859,18 @@ async function handleApi(request, env, url, ctx) {
     const bin = atob(row.data_base64);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const mime = row.mime_type || 'application/octet-stream';
-    const isInline = mime.startsWith('image/');
-    const disp = (isInline ? 'inline' : 'attachment') + "; filename*=UTF-8''" + encodeURIComponent(row.filename || 'file');
+    // 예전에 octet-stream 으로 저장된 첨부도 확장자로 형식을 되살립니다.
+    const mime = mimeForFile(row.filename, row.mime_type);
+    const bare = mime.split(';')[0].trim().toLowerCase();
+    // SVG/HTML 은 같은 출처에서 스크립트가 돌 수 있어 미리보기(inline) 대신 다운로드로 내려줍니다.
+    const isInline = /^image\/(jpeg|png|gif|webp|bmp|avif|heic)$/.test(bare) && url.searchParams.get('download') !== '1';
     return new Response(bytes, {
       status: 200,
       headers: {
         'content-type': mime,
-        'content-disposition': disp,
+        'content-disposition': contentDisposition(row.filename || 'file', isInline),
+        'content-length': String(bytes.length),
+        'x-content-type-options': 'nosniff',
         'cache-control': 'private, max-age=86400',
         ...CORS,
       },

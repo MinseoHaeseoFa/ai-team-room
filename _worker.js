@@ -186,13 +186,19 @@ function decorate(row) {
 async function attachReplies(env, messages, slug) {
   const ids = [...new Set(messages.map((m) => m.reply_to_id).filter(Boolean))];
   if (!ids.length) return messages;
-  const holes = ids.map(() => '?').join(',');
-  const res = await env.DB.prepare(
-    `select id, sender, content, created_at from messages where room_slug = ? and id in (${holes})`
-  )
-    .bind(slug, ...ids)
-    .all();
-  const map = new Map((res.results || []).map((r) => [r.id, r]));
+  // D1 은 쿼리당 바인딩 100개까지만 허용하므로(limit=200 조회 시 답글이 많으면 500),
+  // 90개씩 나눠 조회합니다.
+  const map = new Map();
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90);
+    const holes = chunk.map(() => '?').join(',');
+    const res = await env.DB.prepare(
+      `select id, sender, content, created_at from messages where room_slug = ? and id in (${holes})`
+    )
+      .bind(slug, ...chunk)
+      .all();
+    for (const r of res.results || []) map.set(r.id, r);
+  }
   for (const m of messages) {
     const parent = m.reply_to_id ? map.get(m.reply_to_id) : null;
     m.reply_to = parent

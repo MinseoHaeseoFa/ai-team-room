@@ -2,7 +2,7 @@
  * 3D 오피스 — 김팀장 중앙 총괄석
  * 작은 3D 미니어처 사무실을 three.js 로 그립니다.
  *
- *   [비서실 현황판]  ｜  비서실 존 ｜ **김팀장(중앙 총괄석)** ｜ 폴리코드팀 존 ｜  [폴리코드팀 현황판]
+ *   [비서실 현황판]  ｜  비서실 ｜ **김팀장(중앙 총괄석)** ｜ 폴리코드팀 ｜  [폴리코드팀 현황판]
  *                                   (앞쪽·아래)  회의공간 · 휴게공간
  *
  * 이 파일은 '그리는 일' 만 합니다. 회의실 데이터·상태 판단은 office.js 가 하고,
@@ -19,7 +19,7 @@ import { OrbitControls } from './vendor/OrbitControls.js';
 const ROOM = { w: 21, d: 15.5, h: 3.4 }; // 방 크기 (x, z, 높이)
 
 // 사람 명부. key 는 office.js 와 주고받는 식별자입니다.
-// 김팀장은 비서실 존(왼쪽)과 폴리코드팀 존(오른쪽) 사이, 가운데 총괄석에 앉습니다.
+// 김팀장은 비서실(왼쪽)과 폴리코드팀(오른쪽) 사이, 가운데 총괄석에 앉습니다.
 const PEOPLE = [
   {
     key: 'kim', name: '김팀장', emoji: '🌸', color: '#ff6b9d', hair: '#2f2733',
@@ -33,7 +33,7 @@ const PEOPLE = [
   { key: 'claude', name: '클로드', emoji: '🧠', color: '#5ed6a8', hair: '#26302c', tag: '채용 중', desk: { x: 9.2, z: -3.1, rotY: -0.6 }, empty: true },
 ];
 
-const SLOT = { x: -4.9, z: -4.9, rotY: 0.2 };   // 신규 피클 합류 슬롯 (비서실 존 · 꼬붕이 옆)
+const SLOT = { x: -4.9, z: -4.9, rotY: 0.2 };   // 신규 피클 합류 슬롯 (비서실 · 꼬붕이 옆)
 const PHONE = { x: 0.62, z: -0.02 };            // 김팀장 책상 오른쪽의 회의 전화
 const BOARD_X = 6.3;                            // 두 현황판의 좌우 위치
 const CONSOLE_Z = -ROOM.d / 2 + 0.34;
@@ -452,7 +452,7 @@ export function createOffice(mount, options) {
   addBox(scene, 0.06, 0.16, ROOM.d, baseMat, -ROOM.w / 2 + 0.03, 0.08, 0, false);
   addBox(scene, 0.06, 0.16, ROOM.d, baseMat, ROOM.w / 2 - 0.03, 0.08, 0, false);
 
-  // 존 러그 (좌: 비서실 / 우: 폴리코드팀)
+  // 구역 러그 (좌: 비서실 / 우: 폴리코드팀)
   const rugA = new THREE.Mesh(
     new THREE.PlaneGeometry(9.4, 6.4),
     new THREE.MeshStandardMaterial({ map: rugTexture('#f7e2d8', '#e9bfae', '#f0cbbd'), roughness: 0.95 })
@@ -706,7 +706,7 @@ export function createOffice(mount, options) {
   scene.add(buildPlant(8.95, 0, -7.1, 1.0));
   scene.add(buildPlant(-9.6, 0, 0.4, 0.85));
 
-  /* ---------- 복사·서류 스테이션 (비서실 존) ---------- */
+  /* ---------- 복사·서류 스테이션 (비서실) ---------- */
   function buildPrinterStation(x, z, rotY) {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
@@ -1045,7 +1045,7 @@ export function createOffice(mount, options) {
   phoneSprite.userData.pick = { kind: 'phone' };
   picks.push(phoneSprite);
 
-  /* ---------- 신규 피클 슬롯 (비서실 존) ---------- */
+  /* ---------- 신규 피클 슬롯 (비서실) ---------- */
   const slotGroup = new THREE.Group();
   slotGroup.position.set(SLOT.x, 0, SLOT.z);
   slotGroup.rotation.y = SLOT.rotY;
@@ -1242,7 +1242,7 @@ export function createOffice(mount, options) {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#7b8492';
     ctx.font = 'bold 22px "Malgun Gothic","Noto Sans KR",sans-serif';
-    ctx.fillText('폴리코드팀 존 · PolyCode Dev', 44, 108);
+    ctx.fillText('폴리코드팀 · PolyCode Dev', 44, 108);
     ctx.strokeStyle = 'rgba(120,132,146,.3)';
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(44, 126); ctx.lineTo(W - 44, 126); ctx.stroke();
@@ -1357,7 +1357,7 @@ export function createOffice(mount, options) {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#7b8492';
     ctx.font = 'bold 22px "Malgun Gothic","Noto Sans KR",sans-serif';
-    ctx.fillText('비서실 존 · Pickle Desk · Secretariat', 44, 108);
+    ctx.fillText('비서실 · Pickle Desk · Secretariat', 44, 108);
     ctx.strokeStyle = 'rgba(120,132,146,.3)';
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(44, 126); ctx.lineTo(W - 44, 126); ctx.stroke();

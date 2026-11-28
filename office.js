@@ -412,7 +412,7 @@ function renderInspector(sel) {
     html += '<div class="ins-head">' +
       '<div class="ins-avatar">🗂️</div>' +
       '<div class="ins-title"><h2>비서실 현황판 ' + (state.connected ? '<span class="state planned">실시간</span>' : '') + '</h2>' +
-      '<p>Pickle Desk · 픽클 워커 상태 · 최근 지시</p></div>' +
+      '<p>Pickle Desk · 워커 상태 · 최근 지시</p></div>' +
       '<button class="ins-close" type="button" data-act="close" aria-label="닫기">×</button></div>';
     if (state.connected) {
       html += '<div class="ins-sec"><h3>픽클 워커 현황</h3><div class="rows">' +

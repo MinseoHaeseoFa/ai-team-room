@@ -618,10 +618,10 @@ export function createOffice(mount, options) {
     ctx.fillRect(60, H - 44, W - 120, 12);
 
     // 부서명 — 두 팻말이 같은 크기로 보이도록 긴 이름 기준으로 한 번에 맞춥니다.
-    let fs = 236;
+    let fs = 272;
     const fontOf = function (s) { return 'bold ' + s + 'px "Malgun Gothic","Noto Sans KR",sans-serif'; };
     ctx.font = fontOf(fs);
-    while (ctx.measureText(cfg.text).width > W - 150 && fs > 40) {
+    while (ctx.measureText(cfg.text).width > W - 120 && fs > 40) {
       fs -= 6;
       ctx.font = fontOf(fs);
     }

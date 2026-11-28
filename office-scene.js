@@ -934,16 +934,16 @@ export function createOffice(mount, options) {
     if (cfg.badge) {
       addBox(g, 1.5, 0.42, 0.04, stdMat('#f6e7d3', 0.8), 0, 0.5, 0.46, false);
       const plate = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.56, 0.56),
+        new THREE.PlaneGeometry(0.34, 0.34),
         new THREE.MeshBasicMaterial({ map: badgeTexture(), transparent: true, toneMapped: false })
       );
-      plate.position.set(-0.62, 0.5, 0.485);
+      plate.position.set(-0.56, 0.5, 0.485);
       g.add(plate);
       const small = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.22, 0.22),
+        new THREE.PlaneGeometry(0.16, 0.16),
         new THREE.MeshBasicMaterial({ map: badgeTexture(), transparent: true, toneMapped: false })
       );
-      small.position.set(0.62, 0.5, 0.485);
+      small.position.set(0.56, 0.5, 0.485);
       g.add(small);
     }
 
@@ -1534,7 +1534,7 @@ export function createOffice(mount, options) {
   /* ---------- 카메라 시점 ---------- */
   const VIEWS = {
     all: { pos: [0, 11.2, 14.6], tgt: [0, 0.5, -1.0] },
-    kim: { pos: [0, 4.4, 1.2], tgt: [0, 1.1, -5.2] },
+    kim: { pos: [0, 5.0, 2.8], tgt: [0, 1.2, -5.0] },
     secretariat: { pos: [-1.8, 5.6, 1.2], tgt: [-6.4, 1.5, -5.2] },
     poly: { pos: [1.8, 5.6, 1.2], tgt: [6.4, 1.5, -5.2] },
     common: { pos: [0, 7.2, 12.8], tgt: [0, 0.7, 3.0] },

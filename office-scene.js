@@ -1559,11 +1559,22 @@ export function createOffice(mount, options) {
     return 45;
   }
 
-  function viewDistanceScale() {
+  // 세로로 긴 화면에서는 '전체' 시야만 뒤로 물려 방이 다 들어오게 하고,
+  // 구역별 시점은 화면을 채우도록 그대로 둡니다.
+  function viewDistanceScale(name) {
     const k = aspectKind(camera.aspect || 1.6);
-    if (k === 'portrait') return 1.4;
-    if (k === 'tall') return 1.18;
-    if (k === 'mid') return 1.07;
+    if (name === 'all' || !name) {
+      if (k === 'portrait') return 1.4;
+      if (k === 'tall') return 1.18;
+      if (k === 'mid') return 1.07;
+      return 1;
+    }
+    if (name === 'common') {
+      if (k === 'portrait') return 1.12;
+      if (k === 'tall') return 1.05;
+      return 1;
+    }
+    if (k === 'portrait') return 1.04;
     return 1;
   }
 
@@ -1573,7 +1584,7 @@ export function createOffice(mount, options) {
     const tgt = new THREE.Vector3(v.tgt[0], v.tgt[1], v.tgt[2]);
     const pos = new THREE.Vector3(v.pos[0], v.pos[1], v.pos[2]);
     const dir = pos.clone().sub(tgt);
-    dir.multiplyScalar(viewDistanceScale());
+    dir.multiplyScalar(viewDistanceScale(currentView));
     pos.copy(tgt).add(dir);
     if (instant) {
       camera.position.copy(pos);

@@ -609,26 +609,22 @@ export function createOffice(mount, options) {
 
     // 부서 색 안쪽 테두리
     ctx.strokeStyle = cfg.accent;
-    ctx.lineWidth = 26;
-    roundRect(ctx, 15, 15, W - 30, H - 30, 28);
+    ctx.lineWidth = 22;
+    roundRect(ctx, 14, 14, W - 28, H - 28, 26);
     ctx.stroke();
 
-    // 부서 색 아래 띠 (얇게, 시선을 잡아 주는 포인트)
-    ctx.fillStyle = cfg.accent;
-    ctx.fillRect(60, H - 44, W - 120, 12);
-
     // 부서명 — 두 팻말이 같은 크기로 보이도록 긴 이름 기준으로 한 번에 맞춥니다.
-    let fs = 272;
+    let fs = 250;
     const fontOf = function (s) { return 'bold ' + s + 'px "Malgun Gothic","Noto Sans KR",sans-serif'; };
     ctx.font = fontOf(fs);
-    while (ctx.measureText(cfg.text).width > W - 120 && fs > 40) {
+    while (ctx.measureText(cfg.text).width > W - 140 && fs > 40) {
       fs -= 6;
       ctx.font = fontOf(fs);
     }
     ctx.fillStyle = '#1d232b';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(cfg.text, W / 2, H / 2 - 8);
+    ctx.fillText(cfg.text, W / 2, H / 2);
 
     const tex = canvasTexture(c);
     tex.anisotropy = renderer.capabilities.getMaxAnisotropy();

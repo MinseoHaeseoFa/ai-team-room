@@ -17,7 +17,7 @@ import { OrbitControls } from './vendor/OrbitControls.js';
 /* 설정                                                                */
 /* ------------------------------------------------------------------ */
 
-const ROOM = { w: 21, d: 15.5, h: 4.35 }; // 방 크기 (x, z, 높이) — 현황판 위 부서 팻말 자리까지
+const ROOM = { w: 21, d: 15.5, h: 4.75 }; // 방 크기 (x, z, 높이) — 현황판 위 부서 팻말 자리까지
 
 // 사람 명부. key 는 office.js 와 주고받는 식별자입니다.
 // 김팀장은 비서실(왼쪽)과 폴리코드팀(오른쪽) 사이, 가운데 총괄석에 앉습니다.
@@ -636,10 +636,10 @@ export function createOffice(mount, options) {
 
     // 3D 판 — 부서 색 프레임이 판 전체를 감싸고, 앞면이 팻말 내용
     const frameMat = stdMat(cfg.accentDark, 0.46, 0.2);
-    const plate = addBox(g, 3.98, 0.86, 0.1, frameMat, 0, 0, 0.05);
+    const plate = addBox(g, 4.34, 0.9, 0.1, frameMat, 0, 0, 0.05);
     plate.castShadow = true;
     const face = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.84, 0.78),
+      new THREE.PlaneGeometry(4.2, 0.84),
       new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })
     );
     face.position.set(0, 0, 0.101);
@@ -648,8 +648,8 @@ export function createOffice(mount, options) {
     // 판이 벽에서 살짝 떠 보이게 앞면만 띄웠습니다.
     return g;
   }
-  buildDeptSign({ x: -BOARD_X, y: 3.80, text: '비서실', accent: '#e2738f', accentDark: '#c04f6d' });
-  buildDeptSign({ x: BOARD_X, y: 3.80, text: '폴리코드팀', accent: '#3fae97', accentDark: '#1f8d78' });
+  buildDeptSign({ x: -BOARD_X, y: 3.99, text: '비서실', accent: '#e2738f', accentDark: '#c04f6d' });
+  buildDeptSign({ x: BOARD_X, y: 3.99, text: '폴리코드팀', accent: '#3fae97', accentDark: '#1f8d78' });
 
   /* ---------- 벽시계 (가운데, 김팀장 뒤) ---------- */
   const clockCanvas = canvas2d(256, 256);

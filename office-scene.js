@@ -22,10 +22,10 @@ const PEOPLE = [
     lead: true, desk: { x: -6.2, z: -4.9, rotY: 0 },
     badge: 'ㄱ', // 대표 비서실장 배지 (빨간 ㄱ)
   },
-  { key: 'kkobung', name: '꼬붕이', emoji: '🐣', color: '#f6b45c', hair: '#3b2f24', screen: 'cool', desk: { x: -9.5, z: -1.9, rotY: 0.34 } },
+  { key: 'kkobung', name: '꼬붕이', emoji: '🐣', color: '#f6b45c', hair: '#3b2f24', screen: 'cool', tag: '@iseohaeseopa2', desk: { x: -9.5, z: -1.9, rotY: 0.34 } },
   { key: 'muse', name: '뮤즈', emoji: '🎨', color: '#a78bfa', hair: '#2b2a3a', screen: 'violet', desk: { x: 4.25, z: -4.9, rotY: 0 } },
   { key: 'gemini', name: '제미나이', emoji: '💎', color: '#6fc3ff', hair: '#25313f', screen: 'cool', desk: { x: 7.75, z: -4.9, rotY: 0 } },
-  { key: 'claude', name: '클로드', emoji: '🧠', color: '#5ed6a8', hair: '#26302c', desk: { x: 5.95, z: -1.85, rotY: -0.3 }, empty: true },
+  { key: 'claude', name: '클로드', emoji: '🧠', color: '#5ed6a8', hair: '#26302c', tag: '채용 중', desk: { x: 5.95, z: -1.85, rotY: -0.3 }, empty: true },
 ];
 
 const SLOT = { x: -3.3, z: -1.7, rotY: 0.26 }; // 신규 피클 합류 슬롯
@@ -235,21 +235,27 @@ function screenTexture(variant) {
   return canvasTexture(c);
 }
 
-function nameLabelTexture(name, emoji) {
-  const c = canvas2d(320, 96);
+function nameLabelTexture(name, emoji, sub) {
+  const H = sub ? 118 : 96;
+  const c = canvas2d(340, H);
   const ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, 320, 96);
+  ctx.clearRect(0, 0, 340, H);
   ctx.fillStyle = 'rgba(255,253,247,.94)';
-  roundRect(ctx, 8, 14, 304, 68, 26);
+  roundRect(ctx, 8, 8, 324, H - 16, 26);
   ctx.fill();
   ctx.strokeStyle = 'rgba(120,96,74,.28)';
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.fillStyle = '#2f2a24';
-  ctx.font = 'bold 40px "Malgun Gothic","Noto Sans KR",sans-serif';
+  ctx.font = 'bold 38px "Malgun Gothic","Noto Sans KR",sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(emoji + ' ' + name, 160, 50);
+  ctx.fillText(emoji + ' ' + name, 170, sub ? H / 2 - 16 : H / 2 + 2);
+  if (sub) {
+    ctx.fillStyle = '#8b7663';
+    ctx.font = '23px "Malgun Gothic","Noto Sans KR",sans-serif';
+    ctx.fillText(sub, 170, H / 2 + 22);
+  }
   return canvasTexture(c);
 }
 
@@ -457,30 +463,16 @@ export function createOffice(mount, options) {
   buildWindow(ROOM.w / 2 - 0.06, -3.2, true);
 
   /* ---------- 펜던트 조명 ---------- */
-  function buildPendant(x, z, color) {
-    const g = new THREE.Group();
-    g.position.set(x, 0, z);
-    const cordMat = stdMat('#b9ae9d', 0.9);
-    addBox(g, 0.02, 0.62, 0.02, cordMat, 0, ROOM.h - 0.31, 0, false);
-    const shadeMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(color), roughness: 0.5, metalness: 0.12,
-      emissive: new THREE.Color(color), emissiveIntensity: 0.32,
-    });
-    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.26, 22, 1, true), shadeMat);
-    shade.position.set(0, ROOM.h - 0.66, 0);
-    shade.rotation.x = Math.PI;
-    g.add(shade);
-    const bulb = addSphere(g, 0.07, new THREE.MeshBasicMaterial({ color: '#fff3d6', toneMapped: false }), 0, ROOM.h - 0.78, 0, 12);
-    bulb.castShadow = false;
-    const lamp = new THREE.PointLight('#ffd9a5', 7, 8.5, 2);
-    lamp.position.set(0, ROOM.h - 0.9, 0);
-    g.add(lamp);
-    scene.add(g);
+  // 천장이 없는 모형이라 등기구는 보이지 않게 두고, 따뜻한 빛만 방 안에 내려앉게 합니다.
+  function dropLight(x, z, color, intensity) {
+    const lamp = new THREE.PointLight(color, intensity, 9, 2);
+    lamp.position.set(x, 2.72, z);
+    scene.add(lamp);
   }
-  buildPendant(-8.4, -2.2, '#ffe0bd');
-  buildPendant(-3.4, -2.2, '#ffe0bd');
-  buildPendant(3.4, -2.2, '#d9ecff');
-  buildPendant(8.4, -2.2, '#d9ecff');
+  dropLight(-8.4, -2.2, '#ffe0bd', 6);
+  dropLight(-3.4, -2.2, '#ffe0bd', 6);
+  dropLight(3.4, -2.2, '#d9ecff', 6);
+  dropLight(8.4, -2.2, '#d9ecff', 6);
 
   /* ---------- 존 간판 ---------- */
   function buildZoneSign(x, z, title, sub, bg, fg) {
@@ -554,7 +546,7 @@ export function createOffice(mount, options) {
   clockCtx = clockCanvas.getContext('2d');
   clockTex = canvasTexture(clockCanvas);
   const clockGroup = new THREE.Group();
-  clockGroup.position.set(5.6, 2.62, -ROOM.d / 2 + 0.03);
+  clockGroup.position.set(3.45, 2.5, -ROOM.d / 2 + 0.03);
   const clockBody = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.06, 32), stdMat('#f4ead8', 0.6, 0.1));
   clockBody.rotation.x = Math.PI / 2;
   clockGroup.add(clockBody);
@@ -869,13 +861,13 @@ export function createOffice(mount, options) {
     if (cfg.badge) {
       addBox(g, 1.5, 0.42, 0.04, stdMat('#f6e7d3', 0.8), 0, 0.5, 0.46, false);
       const plate = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.4, 0.4),
+        new THREE.PlaneGeometry(0.56, 0.56),
         new THREE.MeshBasicMaterial({ map: badgeTexture(), transparent: true, toneMapped: false })
       );
       plate.position.set(-0.62, 0.5, 0.485);
       g.add(plate);
       const small = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.16, 0.16),
+        new THREE.PlaneGeometry(0.22, 0.22),
         new THREE.MeshBasicMaterial({ map: badgeTexture(), transparent: true, toneMapped: false })
       );
       small.position.set(0.62, 0.5, 0.485);
@@ -885,6 +877,7 @@ export function createOffice(mount, options) {
     // 사람
     const person = buildPerson(cfg);
     person.group.position.set(0.02, 0, -0.72);
+    person.group.scale.setScalar(1.07);
     g.add(person.group);
 
     scene.add(g);
@@ -895,9 +888,10 @@ export function createOffice(mount, options) {
   PEOPLE.forEach(function (cfg) {
     const built = buildWorkstation(cfg);
     const label = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: nameLabelTexture(cfg.name, cfg.emoji), transparent: true, depthWrite: false,
+      map: nameLabelTexture(cfg.name, cfg.emoji, cfg.tag), transparent: true, depthWrite: false,
     }));
-    label.scale.set(1.05, 0.315, 1);
+    if (cfg.tag) label.scale.set(1.16, 0.4, 1);
+    else label.scale.set(1.05, 0.315, 1);
     label.position.set(0.02, 1.62, -0.72);
     built.group.add(label);
 
@@ -959,7 +953,7 @@ export function createOffice(mount, options) {
   const phoneSprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map: canvasTexture(phoneCanvas), transparent: true, depthWrite: false,
   }));
-  phoneSprite.scale.set(0.34, 0.34, 1);
+  phoneSprite.scale.set(0.46, 0.46, 1);
   phoneSprite.position.set(0, 0.52, 0);
   phoneGroup.add(phoneSprite);
   phoneRing = phoneSprite;
@@ -1225,9 +1219,9 @@ export function createOffice(mount, options) {
 
   /* ---------- 카메라 시점 ---------- */
   const VIEWS = {
-    all: { pos: [0, 13.0, 15.2], tgt: [0, 0.5, -1.6] },
-    secretariat: { pos: [-7.2, 6.4, 7.0], tgt: [-6.5, 0.85, -3.6] },
-    poly: { pos: [7.2, 6.4, 7.0], tgt: [6.3, 0.85, -3.6] },
+    all: { pos: [0, 11.4, 13.0], tgt: [0, 0.75, -2.5] },
+    secretariat: { pos: [-7.2, 6.2, 6.6], tgt: [-6.6, 0.9, -3.8] },
+    poly: { pos: [7.2, 6.2, 6.6], tgt: [6.4, 0.9, -3.8] },
     board: { pos: [0, 2.15, -2.1], tgt: [0, 2.0, -7.9] },
   };
   let tween = null;
@@ -1434,7 +1428,7 @@ export function createOffice(mount, options) {
     // 전화 표시 펄스
     if (phoneRing) {
       const s = 1 + Math.sin(t * 2.3) * 0.06;
-      phoneRing.scale.setScalar(0.34 * s);
+      phoneRing.scale.setScalar(0.46 * s);
       phoneRing.material.opacity = 0.82 + Math.sin(t * 2.3) * 0.14;
     }
 

@@ -314,8 +314,8 @@ export function createOffice(mount, options) {
   scene.background = new THREE.Color('#efe2cf');
   scene.fog = new THREE.Fog('#efe2cf', 34, 58);
 
-  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 140);
-  camera.position.set(0, 13, 15.2);
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 140);
+  camera.position.set(0, 9.8, 11.2);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -1219,7 +1219,7 @@ export function createOffice(mount, options) {
 
   /* ---------- 카메라 시점 ---------- */
   const VIEWS = {
-    all: { pos: [0, 11.4, 13.0], tgt: [0, 0.75, -2.5] },
+    all: { pos: [0, 9.8, 11.2], tgt: [0, 0.85, -2.6] },
     secretariat: { pos: [-7.2, 6.2, 6.6], tgt: [-6.6, 0.9, -3.8] },
     poly: { pos: [7.2, 6.2, 6.6], tgt: [6.4, 0.9, -3.8] },
     board: { pos: [0, 2.15, -2.1], tgt: [0, 2.0, -7.9] },

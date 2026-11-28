@@ -1535,8 +1535,8 @@ export function createOffice(mount, options) {
   const VIEWS = {
     all: { pos: [0, 11.2, 14.6], tgt: [0, 0.5, -1.0] },
     kim: { pos: [0, 5.6, 4.8], tgt: [0, 1.3, -4.6] },
-    secretariat: { pos: [-1.8, 5.6, 1.2], tgt: [-6.4, 1.5, -5.2] },
-    poly: { pos: [1.8, 5.6, 1.2], tgt: [6.4, 1.5, -5.2] },
+    secretariat: { pos: [-2.6, 4.4, 0.0], tgt: [-6.3, 1.9, -6.9] },
+    poly: { pos: [2.6, 4.4, 0.0], tgt: [6.3, 1.9, -6.9] },
     common: { pos: [0, 7.2, 12.8], tgt: [0, 0.7, 3.0] },
   };
   let tween = null;

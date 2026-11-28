@@ -810,9 +810,9 @@ export function createOffice(mount, options) {
   }
 
   /* ---------- 의자 ---------- */
-  function buildChair() {
+  function buildChair(fabric) {
     const g = new THREE.Group();
-    const fab = stdMat('#5b6478', 0.92);
+    const fab = stdMat(fabric || '#5b6478', 0.92);
     const metal = stdMat('#8d95a6', 0.4, 0.65);
     addBox(g, 0.5, 0.07, 0.48, fab, 0, 0.46, 0);
     const back = addBox(g, 0.48, 0.5, 0.07, fab, 0, 0.72, -0.22);
@@ -1186,7 +1186,7 @@ export function createOffice(mount, options) {
   // 회의 의자 6개
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2 + 0.24;
-    const ch = buildChair();
+    const ch = buildChair('#8a7b6b');
     ch.position.set(MEET.x + Math.sin(a) * 1.86, 0, MEET.z + Math.cos(a) * 1.86);
     ch.rotation.y = a + Math.PI;
     scene.add(ch);

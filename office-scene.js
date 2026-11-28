@@ -311,8 +311,17 @@ export function createOffice(mount, options) {
   const bubbleLayer = opts.bubbleLayer || document.body;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#efe2cf');
-  scene.fog = new THREE.Fog('#efe2cf', 34, 58);
+  // 배경은 위아래로 부드러운 그라데이션 (모형 촬영 배경처럼)
+  const bgCanvas = canvas2d(4, 256);
+  const bgCtx = bgCanvas.getContext('2d');
+  const bgGrad = bgCtx.createLinearGradient(0, 0, 0, 256);
+  bgGrad.addColorStop(0, '#faf2e6');
+  bgGrad.addColorStop(0.55, '#f3e6d4');
+  bgGrad.addColorStop(1, '#e8d7c0');
+  bgCtx.fillStyle = bgGrad;
+  bgCtx.fillRect(0, 0, 4, 256);
+  scene.background = canvasTexture(bgCanvas);
+  scene.fog = new THREE.Fog('#e9d8c2', 40, 95);
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 140);
   camera.position.set(0, 9.8, 11.2);
@@ -334,7 +343,7 @@ export function createOffice(mount, options) {
   controls.zoomSpeed = 0.85;
   controls.panSpeed = 0.7;
   controls.minDistance = 3.2;
-  controls.maxDistance = 34;
+  controls.maxDistance = 46;
   controls.minPolarAngle = 0.16;
   controls.maxPolarAngle = Math.PI * 0.487;
   controls.screenSpacePanning = false;
@@ -384,6 +393,24 @@ export function createOffice(mount, options) {
   const plinth = addBox(scene, ROOM.w + 1.4, 0.55, ROOM.d + 1.4, stdMat('#c9a882', 0.9), 0, -0.28, 0, false);
   plinth.receiveShadow = true;
   addBox(scene, ROOM.w + 1.8, 0.1, ROOM.d + 1.8, stdMat('#b08c63', 0.9), 0, -0.58, 0, false);
+
+  // 모형이 놓인 넓은 작업대 (좁은 화면에서도 빈 공간이 배경처럼 보이게)
+  const tableCanvas = canvas2d(512, 512);
+  const tctx = tableCanvas.getContext('2d');
+  const tg = tctx.createRadialGradient(256, 256, 40, 256, 256, 300);
+  tg.addColorStop(0, '#efe1cc');
+  tg.addColorStop(0.6, '#e9d9c2');
+  tg.addColorStop(1, '#e2d0b6');
+  tctx.fillStyle = tg;
+  tctx.fillRect(0, 0, 512, 512);
+  const table = new THREE.Mesh(
+    new THREE.CircleGeometry(80, 64),
+    new THREE.MeshStandardMaterial({ map: canvasTexture(tableCanvas), roughness: 0.98, metalness: 0 })
+  );
+  table.rotation.x = -Math.PI / 2;
+  table.position.y = -0.66;
+  table.receiveShadow = true;
+  scene.add(table);
 
   // 벽 (뒤 · 좌 · 우)
   const wallMat = stdMat('#f7eddc', 0.95);
@@ -1233,17 +1260,36 @@ export function createOffice(mount, options) {
     board: { pos: [0, 2.15, -2.1], tgt: [0, 2.0, -7.9] },
   };
   let tween = null;
+  let currentView = 'all';
+  let aspectClass = '';
+
+  function aspectKind(a) {
+    if (a < 0.85) return 'portrait';
+    if (a < 1.05) return 'tall';
+    if (a < 1.4) return 'mid';
+    return 'wide';
+  }
+
+  // 세로로 긴 화면에서는 시야각을 넓혀 방이 화면 안에 더 들어오게 합니다.
+  function fovForAspect(a) {
+    const k = aspectKind(a);
+    if (k === 'portrait') return 74;
+    if (k === 'tall') return 58;
+    if (k === 'mid') return 48;
+    return 45;
+  }
 
   function viewDistanceScale() {
-    const aspect = camera.aspect || 1.6;
-    if (aspect < 0.85) return 1.42;
-    if (aspect < 1.05) return 1.28;
-    if (aspect < 1.4) return 1.1;
+    const k = aspectKind(camera.aspect || 1.6);
+    if (k === 'portrait') return 1.5;
+    if (k === 'tall') return 1.2;
+    if (k === 'mid') return 1.1;
     return 1;
   }
 
   function setView(name, instant) {
     const v = VIEWS[name] || VIEWS.all;
+    currentView = VIEWS[name] ? name : 'all';
     const tgt = new THREE.Vector3(v.tgt[0], v.tgt[1], v.tgt[2]);
     const pos = new THREE.Vector3(v.pos[0], v.pos[1], v.pos[2]);
     if (name === 'board') {
@@ -1469,8 +1515,15 @@ export function createOffice(mount, options) {
     const w = mount.clientWidth || window.innerWidth;
     const h = mount.clientHeight || window.innerHeight;
     camera.aspect = w / h;
+    camera.fov = fovForAspect(camera.aspect);
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
+    const cls = aspectKind(camera.aspect);
+    if (cls !== aspectClass) {
+      const first = aspectClass === '';
+      aspectClass = cls;
+      if (!first) setView(currentView, true);
+    }
   }
 
   window.addEventListener('resize', resize);

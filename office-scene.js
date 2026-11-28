@@ -1624,7 +1624,7 @@ export function createOffice(mount, options) {
   }
 
   /* ---------- 말풍선 ---------- */
-  let bubbleEl = null, bubbleKey = null, bubbleUntil = 0;
+  let bubbleEl = null, bubbleKey = null, bubbleUntil = 0, bubbleHalf = 120;
   const anchorWorld = new THREE.Vector3();
   const tmpVec = new THREE.Vector3();
 
@@ -1664,6 +1664,7 @@ export function createOffice(mount, options) {
     bubbleEl.classList.add('show');
     bubbleKey = key;
     bubbleUntil = performance.now() + (ms || 5200);
+    bubbleHalf = Math.min(260, bubbleEl.offsetWidth || 240) / 2;
   }
 
   function hideBubble() {
@@ -1790,7 +1791,9 @@ export function createOffice(mount, options) {
       } else {
         const p = projectKey(bubbleKey);
         if (p.visible) {
-          bubbleEl.style.left = p.x + 'px';
+          const vw = window.innerWidth;
+          const x = Math.max(bubbleHalf + 8, Math.min(vw - bubbleHalf - 8, p.x));
+          bubbleEl.style.left = x + 'px';
           bubbleEl.style.top = (p.y - 10) + 'px';
           bubbleEl.style.visibility = 'visible';
         } else {

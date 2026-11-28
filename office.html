@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#efe2cf">
-<title>🏢 3D 오피스 — 폴리코드팀 (PolyCode Team)</title>
-<meta name="description" content="쿠사리님의 3D 미니어처 오피스 — 비서실 존과 폴리코드팀 존을 한눈에.">
+<title>🏢 3D 오피스 — 김팀장 중앙 총괄 (PolyCode Team)</title>
+<meta name="description" content="쿠사리 대표님의 3D 미니어처 오피스 — 김팀장 중앙 총괄석, 비서실 존, 폴리코드팀 존, 회의·휴게공간을 한눈에.">
 <style>
   :root{
     --ink:#12141a; --ink2:#1a1d25; --line:rgba(255,255,255,.14);
@@ -141,6 +141,7 @@
   }
   .row .hash{color:var(--muted);font-size:12px}
   .row .nm{font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .nm .role{color:var(--muted);font-size:11px;font-weight:600;margin-left:3px}
   .row .cnt{margin-left:auto;font-size:11px;color:#cfd6e1;background:rgba(255,255,255,.1);border-radius:9px;padding:1px 7px;white-space:nowrap}
   .row .go{font-size:11px;color:#ffd7e5;background:rgba(255,92,138,.18);border:1px solid rgba(255,92,138,.38);border-radius:9px;padding:3px 8px;text-decoration:none;white-space:nowrap}
   .row .go:hover{background:rgba(255,92,138,.3)}
@@ -246,7 +247,7 @@
     <span class="mark" aria-hidden="true">🏢</span>
     <div>
       <b>3D 오피스</b>
-      <small>폴리코드팀 (PolyCode Team) · 쿠사리님</small>
+      <small>김팀장 중앙 총괄 · 쿠사리 대표님</small>
     </div>
   </div>
   <div class="topright">
@@ -261,14 +262,15 @@
 
 <nav class="hud presets" id="presets" aria-label="카메라 시점">
   <button type="button" data-view="all" aria-pressed="true">전체</button>
+  <button type="button" data-view="kim" aria-pressed="false">김팀장 중앙석</button>
   <button type="button" data-view="secretariat" aria-pressed="false">비서실 존</button>
   <button type="button" data-view="poly" aria-pressed="false">폴리코드팀 존</button>
-  <button type="button" data-view="board" aria-pressed="false">화이트보드</button>
+  <button type="button" data-view="common" aria-pressed="false">회의·휴게공간</button>
 </nav>
 
 <div class="hud hint">
   <b>드래그</b> 회전 · <b>스크롤</b> 확대 · <b>두 손가락</b> 이동<br>
-  캐릭터·화이트보드·전화를 눌러 보세요.
+  캐릭터·두 현황판·전화·회의공간을 눌러 보세요.
 </div>
 
 <aside class="inspector" id="inspector" aria-live="polite" aria-hidden="true"></aside>
@@ -291,7 +293,7 @@
   <div class="box">
     <div class="spin" aria-hidden="true"></div>
     <b>3D 오피스를 짓는 중…</b>
-    <span>책상과 화이트보드를 배치하고 있어요</span>
+    <span>김팀장 총괄석과 두 현황판을 배치하고 있어요</span>
   </div>
 </div>
 

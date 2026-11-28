@@ -1,9 +1,12 @@
 /**
- * 3D 오피스 — 폴리코드팀 (PolyCode Team)
- * 작은 3D 미니어처 사무실을 three.js 로 그립니다. (비서실 존 + 폴리코드팀 존)
+ * 3D 오피스 — 김팀장 중앙 총괄석
+ * 작은 3D 미니어처 사무실을 three.js 로 그립니다.
+ *
+ *   [비서실 현황판]  ｜  비서실 존 ｜ **김팀장(중앙 총괄석)** ｜ 폴리코드팀 존 ｜  [폴리코드팀 현황판]
+ *                                   (앞쪽·아래)  회의공간 · 휴게공간
  *
  * 이 파일은 '그리는 일' 만 합니다. 회의실 데이터·상태 판단은 office.js 가 하고,
- * applyData() 로 상태(작업 중/대기)와 현황판 내용을 받아 화면에 반영합니다.
+ * applyData() 로 상태(작업 중/대기)와 두 현황판 내용을 받아 화면에 반영합니다.
  */
 
 import * as THREE from 'three';
@@ -13,23 +16,29 @@ import { OrbitControls } from './vendor/OrbitControls.js';
 /* 설정                                                                */
 /* ------------------------------------------------------------------ */
 
-const ROOM = { w: 24, d: 16, h: 3.4 }; // 방 크기 (x, z, 높이)
+const ROOM = { w: 21, d: 15.5, h: 3.4 }; // 방 크기 (x, z, 높이)
 
 // 사람 명부. key 는 office.js 와 주고받는 식별자입니다.
+// 김팀장은 비서실 존(왼쪽)과 폴리코드팀 존(오른쪽) 사이, 가운데 총괄석에 앉습니다.
 const PEOPLE = [
   {
-    key: 'kim', name: '김비서', emoji: '🌸', color: '#ff6b9d', hair: '#2f2733',
-    lead: true, desk: { x: -6.2, z: -4.9, rotY: 0 },
-    badge: 'ㄱ', // 대표 비서실장 배지 (빨간 ㄱ)
+    key: 'kim', name: '김팀장', emoji: '🌸', color: '#ff6b9d', hair: '#2f2733',
+    lead: true, desk: { x: 0, z: -5.9, rotY: 0 },
+    badge: 'ㄱ',       // 총괄 배지 (빨간 ㄱ)
+    tag: '중앙 총괄',  // 이름표 아랫줄
   },
-  { key: 'kkobung', name: '꼬붕이', emoji: '🐣', color: '#f6b45c', hair: '#3b2f24', screen: 'cool', tag: '@iseohaeseopa2', desk: { x: -9.5, z: -1.9, rotY: 0.34 } },
-  { key: 'muse', name: '뮤즈', emoji: '🎨', color: '#a78bfa', hair: '#2b2a3a', screen: 'violet', desk: { x: 4.25, z: -4.9, rotY: 0 } },
-  { key: 'gemini', name: '제미나이', emoji: '💎', color: '#6fc3ff', hair: '#25313f', screen: 'cool', desk: { x: 7.75, z: -4.9, rotY: 0 } },
-  { key: 'claude', name: '클로드', emoji: '🧠', color: '#5ed6a8', hair: '#26302c', tag: '채용 중', desk: { x: 5.95, z: -1.85, rotY: -0.3 }, empty: true },
+  { key: 'kkobung', name: '꼬붕이', emoji: '🐣', color: '#f6b45c', hair: '#3b2f24', screen: 'cool', tag: '@iseohaeseopa2', desk: { x: -7.7, z: -4.9, rotY: 0.2 } },
+  { key: 'muse', name: '뮤즈', emoji: '🎨', color: '#a78bfa', hair: '#2b2a3a', screen: 'violet', desk: { x: 4.9, z: -4.9, rotY: -0.2 } },
+  { key: 'gemini', name: '제미나이', emoji: '💎', color: '#6fc3ff', hair: '#25313f', screen: 'cool', desk: { x: 7.7, z: -4.9, rotY: -0.2 } },
+  { key: 'claude', name: '클로드', emoji: '🧠', color: '#5ed6a8', hair: '#26302c', tag: '채용 중', desk: { x: 9.3, z: -2.3, rotY: -0.82 }, empty: true },
 ];
 
-const SLOT = { x: -3.3, z: -1.7, rotY: 0.26 }; // 신규 피클 합류 슬롯
-const PHONE = { x: 0.62, z: -0.02 };           // 김비서 책상 오른쪽의 회의 전화
+const SLOT = { x: -4.9, z: -4.9, rotY: 0.2 };   // 신규 피클 합류 슬롯 (비서실 존 · 꼬붕이 옆)
+const PHONE = { x: 0.62, z: -0.02 };            // 김팀장 책상 오른쪽의 회의 전화
+const BOARD_X = 6.3;                            // 두 현황판의 좌우 위치
+const CONSOLE_Z = -ROOM.d / 2 + 0.34;
+const MEET = { x: -3.9, z: 3.2 };               // 공용 회의공간
+const LOUNGE = { x: 4.1, z: 3.3 };              // 휴게공간
 
 const STATUS_COLOR = {
   active: '#3ecf7e',
@@ -163,7 +172,7 @@ function woodFloorTexture() {
   }
   const t = canvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(5, 3.4);
+  t.repeat.set(4.4, 3.2);
   return t;
 }
 
@@ -189,6 +198,31 @@ function rugTexture(base, border, accent) {
     ctx.moveTo(x, y);
     ctx.lineTo(x + (Math.random() - 0.5) * 26, y + (Math.random() - 0.5) * 26);
     ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  return canvasTexture(c);
+}
+
+/* 동그란 러그 (회의·휴게·총괄석) */
+function roundRugTexture(base, ring, ring2) {
+  const c = canvas2d(512, 512);
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 512, 512);
+  ctx.fillStyle = base;
+  ctx.beginPath(); ctx.arc(256, 256, 250, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = ring;
+  ctx.lineWidth = 14;
+  ctx.beginPath(); ctx.arc(256, 256, 214, 0, Math.PI * 2); ctx.stroke();
+  if (ring2) {
+    ctx.strokeStyle = ring2;
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(256, 256, 186, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.globalAlpha = 0.05;
+  ctx.fillStyle = '#6b5747';
+  for (let i = 0; i < 240; i++) {
+    const a = Math.random() * Math.PI * 2, r = Math.random() * 250;
+    ctx.fillRect(256 + Math.cos(a) * r, 256 + Math.sin(a) * r, 3, 3);
   }
   ctx.globalAlpha = 1;
   return canvasTexture(c);
@@ -259,23 +293,22 @@ function nameLabelTexture(name, emoji, sub) {
   return canvasTexture(c);
 }
 
-function signTexture(title, sub, bg, fg) {
+/* 공간 이름표 (회의공간 · 휴게공간 · 신규 자리) */
+function pillTexture(text, bg, fg) {
   const c = canvas2d(512, 128);
   const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 512, 128);
   ctx.fillStyle = bg;
-  roundRect(ctx, 4, 4, 504, 120, 18);
+  roundRect(ctx, 6, 10, 500, 108, 54);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,.55)';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,255,255,.6)';
+  ctx.lineWidth = 3;
   ctx.stroke();
   ctx.fillStyle = fg;
+  ctx.font = 'bold 46px "Malgun Gothic","Noto Sans KR",sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = 'bold 46px "Malgun Gothic","Noto Sans KR",sans-serif';
-  ctx.fillText(title, 256, 50);
-  ctx.font = '26px "Malgun Gothic","Noto Sans KR",sans-serif';
-  ctx.globalAlpha = 0.9;
-  ctx.fillText(sub, 256, 94);
+  ctx.fillText(text, 256, 66);
   return canvasTexture(c);
 }
 
@@ -324,7 +357,7 @@ export function createOffice(mount, options) {
   scene.fog = new THREE.Fog('#e9d8c2', 40, 95);
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 140);
-  camera.position.set(0, 9.8, 11.2);
+  camera.position.set(0, 11.2, 14.6);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -347,11 +380,11 @@ export function createOffice(mount, options) {
   controls.minPolarAngle = 0.16;
   controls.maxPolarAngle = Math.PI * 0.487;
   controls.screenSpacePanning = false;
-  controls.target.set(0, 0.6, -1.6);
+  controls.target.set(0, 0.6, -1.2);
 
   const picks = [];              // 클릭 가능한 메시들
   const people = {};             // key -> { group, head, armL, armR, ring, label, cfg }
-  let boardCtx = null, boardTex = null;
+  const boards = {};             // key -> { ctx, tex }
   let clockCtx = null, clockTex = null;
   let phoneRing = null;
   let slotRing = null;
@@ -362,13 +395,13 @@ export function createOffice(mount, options) {
   scene.add(hemi);
 
   const sun = new THREE.DirectionalLight('#fff1dc', 2.05);
-  sun.position.set(8, 14, 10);
+  sun.position.set(7, 14, 10);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -16;
-  sun.shadow.camera.right = 16;
-  sun.shadow.camera.top = 14;
-  sun.shadow.camera.bottom = -14;
+  sun.shadow.camera.left = -14;
+  sun.shadow.camera.right = 14;
+  sun.shadow.camera.top = 13;
+  sun.shadow.camera.bottom = -13;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 46;
   sun.shadow.bias = -0.0006;
@@ -419,27 +452,37 @@ export function createOffice(mount, options) {
   addBox(scene, 0.06, 0.16, ROOM.d, baseMat, -ROOM.w / 2 + 0.03, 0.08, 0, false);
   addBox(scene, 0.06, 0.16, ROOM.d, baseMat, ROOM.w / 2 - 0.03, 0.08, 0, false);
 
-  // 존 러그
+  // 존 러그 (좌: 비서실 / 우: 폴리코드팀)
   const rugA = new THREE.Mesh(
-    new THREE.PlaneGeometry(11, 8.4),
+    new THREE.PlaneGeometry(9.4, 6.4),
     new THREE.MeshStandardMaterial({ map: rugTexture('#f7e2d8', '#e9bfae', '#f0cbbd'), roughness: 0.95 })
   );
   rugA.rotation.x = -Math.PI / 2;
-  rugA.position.set(-6.2, 0.014, -2.4);
+  rugA.position.set(-5.6, 0.012, -3.2);
   rugA.receiveShadow = true;
   scene.add(rugA);
 
   const rugB = new THREE.Mesh(
-    new THREE.PlaneGeometry(11, 8.4),
+    new THREE.PlaneGeometry(9.4, 6.4),
     new THREE.MeshStandardMaterial({ map: rugTexture('#dfeee9', '#b3d6cb', '#cae4dc'), roughness: 0.95 })
   );
   rugB.rotation.x = -Math.PI / 2;
-  rugB.position.set(6.2, 0.014, -2.4);
+  rugB.position.set(5.6, 0.012, -3.2);
   rugB.receiveShadow = true;
   scene.add(rugB);
 
+  // 총괄석 표시 — 가운데 둥근 러그
+  const commandRug = new THREE.Mesh(
+    new THREE.CircleGeometry(1.64, 56),
+    new THREE.MeshStandardMaterial({ map: roundRugTexture('#f8ead2', '#d8b26a', '#c99a4e'), roughness: 0.94 })
+  );
+  commandRug.rotation.x = -Math.PI / 2;
+  commandRug.position.set(0, 0.018, -5.9);
+  commandRug.receiveShadow = true;
+  scene.add(commandRug);
+
   /* ---------- 창 (따뜻한 자연광) ---------- */
-  function buildWindow(x, z, flip) {
+  function buildWindow(x, z, flip, withLight) {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     g.rotation.y = flip ? -Math.PI / 2 : Math.PI / 2;
@@ -473,13 +516,17 @@ export function createOffice(mount, options) {
     addBox(g, 3.5, 0.08, 0.5, frameMat, 0, 1.06, 0.2, false);
     scene.add(g);
 
-    const light = new THREE.PointLight('#ffe2b8', 12, 9, 2);
-    light.position.set(x + (flip ? -1.6 : 1.6), 2.3, z);
-    scene.add(light);
+    if (withLight) {
+      const light = new THREE.PointLight('#ffe2b8', 12, 9, 2);
+      light.position.set(x + (flip ? -1.6 : 1.6), 2.3, z);
+      scene.add(light);
+    }
     return g;
   }
-  buildWindow(-ROOM.w / 2 + 0.06, -3.2, false);
-  buildWindow(ROOM.w / 2 - 0.06, -3.2, true);
+  buildWindow(-ROOM.w / 2 + 0.06, -4.0, false, true);
+  buildWindow(ROOM.w / 2 - 0.06, -4.0, true, true);
+  buildWindow(-ROOM.w / 2 + 0.06, 2.6, false, false);
+  buildWindow(ROOM.w / 2 - 0.06, 2.6, true, false);
 
   /* ---------- 펜던트 조명 ---------- */
   // 천장이 없는 모형이라 등기구는 보이지 않게 두고, 따뜻한 빛만 방 안에 내려앉게 합니다.
@@ -488,89 +535,73 @@ export function createOffice(mount, options) {
     lamp.position.set(x, 2.72, z);
     scene.add(lamp);
   }
-  dropLight(-8.4, -2.2, '#ffe0bd', 6);
-  dropLight(-3.4, -2.2, '#ffe0bd', 6);
-  dropLight(3.4, -2.2, '#d9ecff', 6);
-  dropLight(8.4, -2.2, '#d9ecff', 6);
+  dropLight(0, -5.6, '#ffe0bd', 7);
+  dropLight(-6.3, -4.6, '#ffe0bd', 6);
+  dropLight(6.3, -4.6, '#d9ecff', 6);
+  dropLight(MEET.x, MEET.z, '#ffe0bd', 6);
+  dropLight(LOUNGE.x, LOUNGE.z, '#ffe4c8', 5);
 
-  /* ---------- 존 간판 ---------- */
-  function buildZoneSign(x, z, title, sub, bg, fg) {
+  /* ---------- 화이트보드 (두 개: 비서실 / 폴리코드팀) ---------- */
+  function buildBoard(cfg) {
     const g = new THREE.Group();
-    g.position.set(x, 0, z);
-    const tex = signTexture(title, sub, bg, fg);
-    const panel = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.1, 0.775),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false })
-    );
-    panel.position.set(0, 2.85, 0);
-    g.add(panel);
-    const wireMat = stdMat('#8d8378', 0.9);
-    addBox(g, 0.012, 0.46, 0.012, wireMat, -1.3, 3.36, 0, false);
-    addBox(g, 0.012, 0.46, 0.012, wireMat, 1.3, 3.36, 0, false);
+    g.position.set(cfg.x, 0, -ROOM.d / 2 + 0.05);
     scene.add(g);
-    return g;
-  }
-  buildZoneSign(-6.4, -ROOM.d / 2 + 0.06, '비서실 존', 'Pickle Secretariat', '#d94861', '#fff6f2');
-  buildZoneSign(6.4, -ROOM.d / 2 + 0.06, '폴리코드팀 존', 'PolyCode Dev', '#3d8f7a', '#f2fffb');
 
-  /* ---------- 화이트보드 ---------- */
-  const boardGroup = new THREE.Group();
-  boardGroup.position.set(0, 0, -ROOM.d / 2 + 0.05);
-  scene.add(boardGroup);
-
-  const boardCanvas = canvas2d(1024, 576);
-  boardCtx = boardCanvas.getContext('2d');
-  boardTex = canvasTexture(boardCanvas);
-  const boardPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.3, 2.42),
-    new THREE.MeshBasicMaterial({ map: boardTex, toneMapped: false })
-  );
-  boardPlane.position.set(0, 2.02, 0.045);
-  boardGroup.add(boardPlane);
-
-  const frameMat2 = stdMat('#c9bfae', 0.7, 0.15);
-  addBox(boardGroup, 4.46, 0.07, 0.1, frameMat2, 0, 3.25, 0.03, false);
-  addBox(boardGroup, 4.46, 0.07, 0.1, frameMat2, 0, 0.79, 0.03, false);
-  addBox(boardGroup, 0.07, 2.53, 0.1, frameMat2, -2.2, 2.02, 0.03, false);
-  addBox(boardGroup, 0.07, 2.53, 0.1, frameMat2, 2.2, 2.02, 0.03, false);
-  addBox(boardGroup, 4.3, 0.05, 0.12, stdMat('#e9e2d5', 0.6), 0, 0.76, 0.08, false);
-  // 마커
-  const markerColors = ['#e05263', '#4b93d1', '#3f9c6d'];
-  markerColors.forEach(function (col, i) {
-    const m = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.022, 0.022, 0.16, 10),
-      stdMat(col, 0.6)
+    const c = canvas2d(1280, 720);
+    const ctx = c.getContext('2d');
+    const tex = canvasTexture(c);
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.3, 2.42),
+      new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })
     );
-    m.rotation.z = Math.PI / 2;
-    m.position.set(-1.6 + i * 0.24, 0.8, 0.1);
-    boardGroup.add(m);
-  });
+    plane.position.set(0, 2.02, 0.045);
+    g.add(plane);
 
-  boardGroup.traverse(function (o) {
-    if (o.isMesh) { o.userData.pick = { kind: 'board', key: 'board' }; picks.push(o); }
-  });
+    const frameMat2 = stdMat('#c9bfae', 0.7, 0.15);
+    addBox(g, 4.46, 0.07, 0.1, frameMat2, 0, 3.25, 0.03, false);
+    addBox(g, 4.46, 0.07, 0.1, frameMat2, 0, 0.79, 0.03, false);
+    addBox(g, 0.07, 2.53, 0.1, frameMat2, -2.2, 2.02, 0.03, false);
+    addBox(g, 0.07, 2.53, 0.1, frameMat2, 2.2, 2.02, 0.03, false);
+    addBox(g, 4.3, 0.05, 0.12, stdMat('#e9e2d5', 0.6), 0, 0.76, 0.08, false);
+    // 마커
+    const markerColors = ['#e05263', '#4b93d1', '#3f9c6d'];
+    markerColors.forEach(function (col, i) {
+      const m = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.022, 0.022, 0.16, 10),
+        stdMat(col, 0.6)
+      );
+      m.rotation.z = Math.PI / 2;
+      m.position.set(-1.6 + i * 0.24, 0.8, 0.1);
+      g.add(m);
+    });
 
-  // 화이트보드 아래 콘솔
-  const consoleMat = stdMat('#e8d9c4', 0.8);
-  addBox(scene, 2.3, 0.7, 0.42, consoleMat, 0, 0.35, -ROOM.d / 2 + 0.32);
-  addBox(scene, 2.42, 0.06, 0.5, stdMat('#f2e6d4', 0.7), 0, 0.72, -ROOM.d / 2 + 0.32);
-  addBox(scene, 0.5, 0.09, 0.34, stdMat('#6f7f97', 0.8), -0.7, 0.8, -ROOM.d / 2 + 0.32);
-  addBox(scene, 0.46, 0.06, 0.3, stdMat('#c25555', 0.8), -0.7, 0.87, -ROOM.d / 2 + 0.32);
-  addCyl(scene, 0.08, 0.11, 0.16, stdMat('#cdb79c', 0.7), 0.75, 0.83, -ROOM.d / 2 + 0.34);
-  const consolePlant = buildPlant(0.22, 0.75, -ROOM.d / 2 + 0.34, 0.5);
-  scene.add(consolePlant);
+    g.traverse(function (o) {
+      if (o.isMesh) { o.userData.pick = { kind: 'board', key: cfg.key }; picks.push(o); }
+    });
 
-  /* ---------- 벽시계 ---------- */
+    // 현황판 아래 콘솔
+    addBox(scene, 2.2, 0.7, 0.42, stdMat('#e8d9c4', 0.8), cfg.x, 0.35, CONSOLE_Z);
+    addBox(scene, 2.32, 0.06, 0.5, stdMat('#f2e6d4', 0.7), cfg.x, 0.72, CONSOLE_Z);
+    addBox(scene, 0.5, 0.09, 0.34, stdMat('#6f7f97', 0.8), cfg.x - 0.66, 0.8, CONSOLE_Z);
+    addBox(scene, 0.46, 0.06, 0.3, stdMat('#c25555', 0.8), cfg.x - 0.66, 0.87, CONSOLE_Z);
+    scene.add(buildPlant(cfg.x + 0.7, 0.75, CONSOLE_Z + 0.02, 0.5));
+
+    return { ctx: ctx, tex: tex };
+  }
+  boards.secretariat = buildBoard({ x: -BOARD_X, key: 'secretariat' });
+  boards.poly = buildBoard({ x: BOARD_X, key: 'poly' });
+
+  /* ---------- 벽시계 (가운데, 김팀장 뒤) ---------- */
   const clockCanvas = canvas2d(256, 256);
   clockCtx = clockCanvas.getContext('2d');
   clockTex = canvasTexture(clockCanvas);
   const clockGroup = new THREE.Group();
-  clockGroup.position.set(3.45, 2.5, -ROOM.d / 2 + 0.03);
-  const clockBody = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.06, 32), stdMat('#f4ead8', 0.6, 0.1));
+  clockGroup.position.set(0, 2.58, -ROOM.d / 2 + 0.03);
+  const clockBody = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.06, 32), stdMat('#f4ead8', 0.6, 0.1));
   clockBody.rotation.x = Math.PI / 2;
   clockGroup.add(clockBody);
   const clockFace = new THREE.Mesh(
-    new THREE.CircleGeometry(0.33, 40),
+    new THREE.CircleGeometry(0.31, 40),
     new THREE.MeshBasicMaterial({ map: clockTex, toneMapped: false })
   );
   clockFace.position.z = 0.035;
@@ -609,9 +640,10 @@ export function createOffice(mount, options) {
     addBox(g, 0.06, h + 0.12, 0.06, fr, w / 2 + 0.03, 2.0, 0.02, false);
     scene.add(g);
   }
-  buildFrame(-ROOM.w / 2 + 0.16, -6.5, 1.1, 0.8, Math.PI / 2, ['#f2b7a0', '#e08e79']);
-  buildFrame(-ROOM.w / 2 + 0.16, 0.7, 1.1, 0.8, Math.PI / 2, ['#bcd9c8', '#8fbfae']);
-  buildFrame(ROOM.w / 2 - 0.16, 0.8, 1.1, 0.8, -Math.PI / 2, ['#cdc2ee', '#a996dd']);
+  buildFrame(-ROOM.w / 2 + 0.16, -0.9, 1.1, 0.8, Math.PI / 2, ['#f2b7a0', '#e08e79']);
+  buildFrame(-ROOM.w / 2 + 0.16, 5.4, 1.1, 0.8, Math.PI / 2, ['#bcd9c8', '#8fbfae']);
+  buildFrame(ROOM.w / 2 - 0.16, -0.9, 1.1, 0.8, -Math.PI / 2, ['#cdc2ee', '#a996dd']);
+  buildFrame(ROOM.w / 2 - 0.16, 5.4, 1.1, 0.8, -Math.PI / 2, ['#f4d7a8', '#e0b97c']);
 
   /* ---------- 책장 ---------- */
   function buildBookshelf(x, z, rotY) {
@@ -640,7 +672,7 @@ export function createOffice(mount, options) {
     }
     scene.add(g);
   }
-  buildBookshelf(ROOM.w / 2 - 0.55, -6.85, -Math.PI / 2);
+  buildBookshelf(ROOM.w / 2 - 0.55, -6.3, -Math.PI / 2);
 
   /* ---------- 식물 ---------- */
   function buildPlant(x, y, z, scale) {
@@ -670,11 +702,10 @@ export function createOffice(mount, options) {
     });
     return g;
   }
-  scene.add(buildPlant(-0.9, 0, -ROOM.d / 2 + 0.55, 1.15));
-  scene.add(buildPlant(-ROOM.w / 2 + 0.9, 0, -ROOM.d / 2 + 0.9, 1.25));
-  scene.add(buildPlant(ROOM.w / 2 - 1.1, 0, -ROOM.d / 2 + 1.0, 1.0));
-  scene.add(buildPlant(-ROOM.w / 2 + 1.2, 0, 3.6, 1.0));
-  scene.add(buildPlant(ROOM.w / 2 - 1.2, 0, 3.8, 1.1));
+  scene.add(buildPlant(-9.7, 0, -7.0, 1.2));
+  scene.add(buildPlant(8.95, 0, -7.1, 1.0));
+  scene.add(buildPlant(-9.6, 0, 6.3, 1.05));
+  scene.add(buildPlant(9.5, 0, 6.2, 1.0));
 
   /* ---------- 사람 ---------- */
   function buildPerson(cfg) {
@@ -797,6 +828,10 @@ export function createOffice(mount, options) {
     addBox(g, 0.48, 0.6, 0.72, woodDark, 0.66, 0.31, -0.02);
     addBox(g, 0.4, 0.03, 0.02, stdMat('#a98d6d', 0.6), 0.66, 0.46, 0.35, false);
     addBox(g, 0.4, 0.03, 0.02, stdMat('#a98d6d', 0.6), 0.66, 0.26, 0.35, false);
+    // 총괄석 금색 앞 테두리
+    if (cfg.lead) {
+      addBox(g, 1.95, 0.022, 0.04, stdMat('#c9a35c', 0.45, 0.5), 0, 0.72, 0.455, false);
+    }
 
     // 모니터 (비스듬히 — 얼굴이 보이도록)
     const monitor = new THREE.Group();
@@ -876,7 +911,7 @@ export function createOffice(mount, options) {
       g.add(plant);
     }
 
-    // 대표 비서실장 ㄱ 배지
+    // 총괄 ㄱ 배지
     if (cfg.badge) {
       addBox(g, 1.5, 0.42, 0.04, stdMat('#f6e7d3', 0.8), 0, 0.5, 0.46, false);
       const plate = new THREE.Mesh(
@@ -943,9 +978,9 @@ export function createOffice(mount, options) {
     people.claude.label.visible = true;
   }
 
-  /* ---------- 회의 전화 (김비서 책상) ---------- */
+  /* ---------- 회의 전화 (김팀장 중앙석) ---------- */
   const phoneGroup = new THREE.Group();
-  phoneGroup.position.set(-6.2 + PHONE.x, 0.79, -4.9 + PHONE.z);
+  phoneGroup.position.set(PHONE.x, 0.79, -5.9 + PHONE.z);
   phoneGroup.rotation.y = -0.18;
   scene.add(phoneGroup);
   addBox(phoneGroup, 0.3, 0.055, 0.22, stdMat('#2f3644', 0.55, 0.35), 0, 0.03, 0);
@@ -991,7 +1026,7 @@ export function createOffice(mount, options) {
   phoneSprite.userData.pick = { kind: 'phone' };
   picks.push(phoneSprite);
 
-  /* ---------- 신규 피클 슬롯 ---------- */
+  /* ---------- 신규 피클 슬롯 (비서실 존) ---------- */
   const slotGroup = new THREE.Group();
   slotGroup.position.set(SLOT.x, 0, SLOT.z);
   slotGroup.rotation.y = SLOT.rotY;
@@ -1013,13 +1048,6 @@ export function createOffice(mount, options) {
   addBox(slotGroup, 0.34, 0.05, 0.02, ghostLine, 0, 1.02, -0.17, false);
   addBox(slotGroup, 0.05, 0.34, 0.02, ghostLine, 0, 1.02, -0.17, false);
 
-  // 빈 빈백
-  const bean = new THREE.Mesh(new THREE.SphereGeometry(0.42, 22, 16), stdMat('#ffd0c2', 0.95));
-  bean.scale.set(1, 0.62, 1);
-  bean.position.set(0.05, 0.26, 0.9);
-  bean.castShadow = true;
-  slotGroup.add(bean);
-
   slotRing = new THREE.Mesh(
     new THREE.RingGeometry(0.72, 0.78, 48),
     new THREE.MeshBasicMaterial({ color: '#ff8fb4', transparent: true, opacity: 0.5, side: THREE.DoubleSide })
@@ -1028,22 +1056,12 @@ export function createOffice(mount, options) {
   slotRing.position.set(0, 0.02, 0);
   slotGroup.add(slotRing);
 
-  const slotLabelCanvas = canvas2d(512, 112);
-  const sctx = slotLabelCanvas.getContext('2d');
-  sctx.fillStyle = 'rgba(255,255,255,.94)';
-  roundRect(sctx, 4, 4, 504, 104, 22);
-  sctx.fill();
-  sctx.strokeStyle = 'rgba(217,72,97,.5)';
-  sctx.lineWidth = 3; sctx.stroke();
-  sctx.fillStyle = '#8a3d55';
-  sctx.font = 'bold 42px "Malgun Gothic","Noto Sans KR",sans-serif';
-  sctx.textAlign = 'center'; sctx.textBaseline = 'middle';
-  sctx.fillText('＋ 신규 피클 자리', 256, 56);
   const slotLabel = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: canvasTexture(slotLabelCanvas), transparent: true, depthWrite: false,
+    map: pillTexture('＋ 신규 피클 자리', 'rgba(255,255,255,.94)', '#8a3d55'),
+    transparent: true, depthWrite: false,
   }));
-  slotLabel.scale.set(1.5, 0.33, 1);
-  slotLabel.position.set(0, 1.55, 0);
+  slotLabel.scale.set(1.5, 0.375, 1);
+  slotLabel.position.set(0, 1.5, 0);
   slotGroup.add(slotLabel);
 
   slotGroup.traverse(function (o) {
@@ -1052,7 +1070,7 @@ export function createOffice(mount, options) {
   slotLabel.userData.pick = { kind: 'slot', key: 'slot' };
   picks.push(slotLabel);
 
-  /* ---------- 라운지 (빈백) ---------- */
+  /* ---------- 휴게공간 ---------- */
   function buildLoungeBean(x, z, color) {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
@@ -1069,76 +1087,165 @@ export function createOffice(mount, options) {
     g.add(seam);
     scene.add(g);
   }
-  buildLoungeBean(-8.7, 1.7, '#f7c3b0');
-  buildLoungeBean(-4.7, 1.6, '#f8d8c4');
-  buildLoungeBean(8.8, 1.7, '#bfe0d6');
-  buildLoungeBean(4.7, 1.6, '#cfe8e0');
 
   function buildCoffeeTable(x, z, color) {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
-    addCyl(g, 0.42, 0.42, 0.05, stdMat(color, 0.7), 0, 0.42, 0, 26);
+    addCyl(g, 0.5, 0.5, 0.05, stdMat(color, 0.7), 0, 0.42, 0, 30);
     addCyl(g, 0.05, 0.05, 0.4, stdMat('#a98d6d', 0.8), 0, 0.21, 0, 12);
-    addCyl(g, 0.24, 0.24, 0.03, stdMat('#a98d6d', 0.8), 0, 0.02, 0, 20);
-    const cup = addCyl(g, 0.05, 0.042, 0.08, stdMat('#ffffff', 0.5), 0.12, 0.485, 0.06, 14);
+    addCyl(g, 0.26, 0.26, 0.03, stdMat('#a98d6d', 0.8), 0, 0.02, 0, 22);
+    const cup = addCyl(g, 0.05, 0.042, 0.08, stdMat('#ffffff', 0.5), 0.14, 0.485, 0.06, 14);
     cup.castShadow = false;
-    addBox(g, 0.2, 0.015, 0.16, stdMat('#e8e2d5', 0.9), -0.13, 0.45, -0.02, false);
+    addBox(g, 0.22, 0.015, 0.17, stdMat('#e8e2d5', 0.9), -0.14, 0.45, -0.02, false);
+    const book = addBox(g, 0.16, 0.035, 0.22, stdMat('#c97b6a', 0.8), -0.02, 0.465, 0.16, false);
+    book.rotation.y = 0.3;
     scene.add(g);
   }
-  buildCoffeeTable(-6.7, -0.1, '#f0e0cd');
-  buildCoffeeTable(6.8, -0.1, '#e2efe9');
 
-  /* ---------- 화이트보드 그리기 ---------- */
-  function drawBoard(data) {
-    if (!boardCtx) return;
-    const ctx = boardCtx;
-    const W = 1024, H = 576;
+  function buildFloorLamp(x, z) {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    addCyl(g, 0.11, 0.13, 0.035, stdMat('#8d95a6', 0.5, 0.45), 0, 0.018, 0, 18);
+    addCyl(g, 0.018, 0.018, 1.42, stdMat('#6f7684', 0.5, 0.5), 0, 0.73, 0, 10);
+    const shade = new THREE.Mesh(
+      new THREE.ConeGeometry(0.28, 0.3, 22, 1, true),
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color('#f8ecd6'), roughness: 0.9, side: THREE.DoubleSide,
+        emissive: new THREE.Color('#ffd9a0'), emissiveIntensity: 0.4,
+      })
+    );
+    shade.position.set(0, 1.48, 0);
+    shade.castShadow = false;
+    g.add(shade);
+    scene.add(g);
+  }
+
+  // 휴게공간 러그
+  const loungeRug = new THREE.Mesh(
+    new THREE.CircleGeometry(2.55, 56),
+    new THREE.MeshStandardMaterial({ map: roundRugTexture('#e7f2ec', '#bcdccd', '#d4e9df'), roughness: 0.95 })
+  );
+  loungeRug.rotation.x = -Math.PI / 2;
+  loungeRug.position.set(LOUNGE.x, 0.016, LOUNGE.z);
+  loungeRug.receiveShadow = true;
+  scene.add(loungeRug);
+
+  buildLoungeBean(LOUNGE.x - 1.25, LOUNGE.z - 0.55, '#f7c3b0');
+  buildLoungeBean(LOUNGE.x + 1.2, LOUNGE.z - 0.7, '#f8d8c4');
+  buildLoungeBean(LOUNGE.x - 0.7, LOUNGE.z + 1.35, '#f3cdb9');
+  buildCoffeeTable(LOUNGE.x + 0.1, LOUNGE.z + 0.2, '#efe3d1');
+  buildFloorLamp(LOUNGE.x + 2.05, LOUNGE.z + 1.35);
+
+  /* ---------- 공용 회의공간 ---------- */
+  const meetRug = new THREE.Mesh(
+    new THREE.CircleGeometry(2.9, 60),
+    new THREE.MeshStandardMaterial({ map: roundRugTexture('#f5efe0', '#d8cdb4', '#e6ddca'), roughness: 0.95 })
+  );
+  meetRug.rotation.x = -Math.PI / 2;
+  meetRug.position.set(MEET.x, 0.016, MEET.z);
+  meetRug.receiveShadow = true;
+  scene.add(meetRug);
+
+  const meetingGroup = new THREE.Group();
+  meetingGroup.position.set(MEET.x, 0, MEET.z);
+  scene.add(meetingGroup);
+  // 둥근 회의 테이블
+  addCyl(meetingGroup, 1.12, 1.12, 0.08, stdMat('#f2e6d2', 0.55), 0, 0.74, 0, 44);
+  addCyl(meetingGroup, 1.08, 1.08, 0.03, stdMat('#d9c9b0', 0.8), 0, 0.69, 0, 44);
+  addCyl(meetingGroup, 0.13, 0.17, 0.66, stdMat('#b9a68f', 0.8), 0, 0.35, 0, 18);
+  addCyl(meetingGroup, 0.52, 0.6, 0.05, stdMat('#b9a68f', 0.8), 0, 0.03, 0, 30);
+  // 테이블 위 소품
+  addBox(meetingGroup, 0.42, 0.02, 0.3, stdMat('#5a606e', 0.6, 0.2), -0.18, 0.79, 0.05, false);
+  addBox(meetingGroup, 0.36, 0.015, 0.26, stdMat('#e9eef5', 0.8), -0.18, 0.8, 0.05, false);
+  const meetMug1 = addCyl(meetingGroup, 0.05, 0.045, 0.085, stdMat('#ffffff', 0.5), 0.34, 0.81, -0.22, 14);
+  meetMug1.castShadow = false;
+  const meetMug2 = addCyl(meetingGroup, 0.05, 0.045, 0.085, stdMat('#e9b7a6', 0.5), 0.12, 0.81, 0.44, 14);
+  meetMug2.castShadow = false;
+  addBox(meetingGroup, 0.24, 0.03, 0.32, stdMat('#fdf8ef', 0.9), 0.46, 0.795, 0.24, false);
+  addCyl(meetingGroup, 0.16, 0.14, 0.05, stdMat('#cfd8e2', 0.5), -0.44, 0.8, -0.4, 20);
+
+  // 회의 의자 6개
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.24;
+    const ch = buildChair();
+    ch.position.set(MEET.x + Math.sin(a) * 1.86, 0, MEET.z + Math.cos(a) * 1.86);
+    ch.rotation.y = a + Math.PI;
+    scene.add(ch);
+  }
+
+  /* ---------- 공간 이름표 ---------- */
+  function spaceLabel(text, x, y, z) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: pillTexture(text, 'rgba(255,253,247,.95)', '#6a5a49'),
+      transparent: true, depthWrite: false,
+    }));
+    sp.scale.set(1.34, 0.335, 1);
+    sp.position.set(x, y, z);
+    scene.add(sp);
+    return sp;
+  }
+  spaceLabel('회의공간', MEET.x, 1.16, MEET.z + 2.55);
+  spaceLabel('휴게공간', LOUNGE.x, 1.16, LOUNGE.z + 2.5);
+
+  // 회의·휴게 영역은 눌러서 안내를 볼 수 있습니다.
+  meetingGroup.traverse(function (o) {
+    if (o.isMesh) { o.userData.pick = { kind: 'common', key: 'meeting' }; picks.push(o); }
+  });
+
+  /* ---------- 화이트보드 그리기 : 폴리코드팀 ---------- */
+  function drawPolicyBoard(data) {
+    const b = boards.poly;
+    if (!b) return;
+    const ctx = b.ctx;
+    const W = 1280, H = 720;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#fbfaf6';
     ctx.fillRect(0, 0, W, H);
-    // 아주 옅은 보드 결
     ctx.globalAlpha = 0.05;
     ctx.fillStyle = '#7e8c99';
-    for (let i = 0; i < 24; i++) ctx.fillRect(0, i * 24, W, 1);
+    for (let i = 0; i < 30; i++) ctx.fillRect(0, i * 24, W, 1);
     ctx.globalAlpha = 1;
+    ctx.fillStyle = '#3d8f7a';
+    ctx.fillRect(0, 0, W, 10);
 
     const connected = !!(data && data.connected);
     const now = (data && data.updated) || '';
 
-    // 제목
-    ctx.fillStyle = '#2c333d';
-    ctx.font = 'bold 46px "Malgun Gothic","Noto Sans KR",sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText('폴리코드팀 현황판', 44, 74);
-    ctx.font = '26px "Malgun Gothic","Noto Sans KR",sans-serif';
-    ctx.fillStyle = '#7b8492';
+    ctx.fillStyle = '#2c333d';
+    ctx.font = 'bold 44px "Malgun Gothic","Noto Sans KR",sans-serif';
+    ctx.fillText('폴리코드팀 현황판', 44, 72);
+    ctx.fillStyle = '#8d97a4';
+    ctx.font = '24px "Malgun Gothic","Noto Sans KR",sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText(now, W - 44, 70);
-    ctx.strokeStyle = 'rgba(120,132,146,.35)';
+    ctx.fillText(now, W - 44, 68);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#7b8492';
+    ctx.font = 'bold 22px "Malgun Gothic","Noto Sans KR",sans-serif';
+    ctx.fillText('폴리코드팀 존 · PolyCode Dev', 44, 108);
+    ctx.strokeStyle = 'rgba(120,132,146,.3)';
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(44, 96); ctx.lineTo(W - 44, 96); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(44, 126); ctx.lineTo(W - 44, 126); ctx.stroke();
 
     if (!connected) {
-      ctx.textAlign = 'left';
       ctx.fillStyle = '#43505f';
       ctx.font = 'bold 34px "Malgun Gothic","Noto Sans KR",sans-serif';
-      ctx.fillText('회의실 연결 대기', 44, 190);
+      ctx.fillText('회의실 연결 대기', 44, 208);
       ctx.font = '27px "Malgun Gothic","Noto Sans KR",sans-serif';
       ctx.fillStyle = '#68727f';
       const lines = wrapChars(ctx, '입장 비밀번호를 넣으면 이 보드에 방별 메시지 수와 최근 #general 공지가 실시간으로 표시됩니다.', 860, 3);
-      lines.forEach(function (ln, i) { ctx.fillText(ln, 44, 240 + i * 38); });
-      ctx.fillStyle = '#c9535f';
+      lines.forEach(function (ln, i) { ctx.fillText(ln, 44, 258 + i * 38); });
+      ctx.fillStyle = '#3d8f7a';
       ctx.font = 'bold 28px "Malgun Gothic","Noto Sans KR",sans-serif';
-      ctx.fillText('[회의실 연결]  →  💬 회의실에서 입장하거나, 보드를 눌러 비밀번호를 넣으세요.', 44, 420);
-      // 점선 테두리
+      ctx.fillText('[회의실 연결]  →  💬 회의실에서 입장하거나, 보드를 눌러 비밀번호를 넣으세요.', 44, 440);
       ctx.setLineDash([10, 8]);
-      ctx.strokeStyle = 'rgba(200,90,110,.4)';
+      ctx.strokeStyle = 'rgba(61,143,122,.45)';
       ctx.lineWidth = 2;
       roundRect(ctx, 30, 24, W - 60, H - 48, 14);
       ctx.stroke();
       ctx.setLineDash([]);
-      boardTex.needsUpdate = true;
+      b.tex.needsUpdate = true;
       return;
     }
 
@@ -1149,55 +1256,216 @@ export function createOffice(mount, options) {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#7b8492';
     ctx.font = 'bold 24px "Malgun Gothic","Noto Sans KR",sans-serif';
-    ctx.fillText('회의실 방 · 메시지 수', 44, 138);
+    ctx.fillText('회의실 방 · 메시지 수', 44, 176);
     rooms.slice(0, 4).forEach(function (r, i) {
-      const y = 186 + i * 58;
+      const y = 236 + i * 74;
       ctx.fillStyle = '#3f4a57';
-      ctx.font = 'bold 30px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.font = 'bold 32px "Malgun Gothic","Noto Sans KR",sans-serif';
       ctx.fillText('#' + r.name, 44, y);
       const ratio = maxCount ? Math.max(0.04, (r.count || 0) / maxCount) : 0.04;
       ctx.fillStyle = 'rgba(120,140,160,.16)';
-      roundRect(ctx, 300, y - 22, 300, 16, 8);
+      roundRect(ctx, 300, y - 24, 290, 18, 9);
       ctx.fill();
       ctx.fillStyle = i === 0 ? '#d94861' : '#5c9e8c';
-      roundRect(ctx, 300, y - 22, Math.max(20, 300 * ratio), 16, 8);
+      roundRect(ctx, 300, y - 24, Math.max(22, 290 * ratio), 18, 9);
       ctx.fill();
       ctx.fillStyle = '#5c6673';
-      ctx.font = 'bold 27px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.font = 'bold 28px "Malgun Gothic","Noto Sans KR",sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText((r.count || 0) + '건', 672, y);
+      ctx.fillText((r.count || 0) + '건', 690, y);
       ctx.textAlign = 'left';
     });
 
     // 오른쪽: 최근 #general 공지
     ctx.strokeStyle = 'rgba(120,132,146,.28)';
-    ctx.beginPath(); ctx.moveTo(700, 120); ctx.lineTo(700, H - 60); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(730, 150); ctx.lineTo(730, H - 60); ctx.stroke();
 
     ctx.fillStyle = '#7b8492';
     ctx.font = 'bold 24px "Malgun Gothic","Noto Sans KR",sans-serif';
-    ctx.fillText('최근 #general 공지', 730, 138);
+    ctx.fillText('최근 #general 공지', 770, 176);
 
     const n = (data && data.notice) || null;
     if (n) {
       ctx.fillStyle = '#c9535f';
-      ctx.font = 'bold 27px "Malgun Gothic","Noto Sans KR",sans-serif';
-      ctx.fillText(n.who || '', 730, 182);
+      ctx.font = 'bold 28px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.fillText(n.who || '', 770, 232);
       ctx.fillStyle = '#8d97a4';
       ctx.font = '23px "Malgun Gothic","Noto Sans KR",sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(n.time || '', W - 44, 182);
+      ctx.fillText(n.time || '', W - 44, 232);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#3f4a57';
       ctx.font = '26px "Malgun Gothic","Noto Sans KR",sans-serif';
-      const lines = wrapChars(ctx, n.text || '', 250, 10);
-      lines.forEach(function (ln, i) { ctx.fillText(ln, 730, 224 + i * 34); });
+      const lines = wrapChars(ctx, n.text || '', 440, 11);
+      lines.forEach(function (ln, i) { ctx.fillText(ln, 770, 278 + i * 36); });
     } else {
       ctx.fillStyle = '#8d97a4';
       ctx.font = '26px "Malgun Gothic","Noto Sans KR",sans-serif';
-      ctx.fillText('아직 공지가 없습니다.', 730, 190);
+      ctx.fillText('아직 공지가 없습니다.', 770, 238);
     }
 
-    boardTex.needsUpdate = true;
+    b.tex.needsUpdate = true;
+  }
+
+  /* ---------- 화이트보드 그리기 : 비서실 ---------- */
+  function drawSecretariatBoard(data) {
+    const b = boards.secretariat;
+    if (!b) return;
+    const ctx = b.ctx;
+    const W = 1280, H = 720;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#fbfaf6';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 0.05;
+    ctx.fillStyle = '#7e8c99';
+    for (let i = 0; i < 30; i++) ctx.fillRect(0, i * 24, W, 1);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#d94861';
+    ctx.fillRect(0, 0, W, 10);
+
+    const connected = !!(data && data.connected);
+    const now = (data && data.updated) || '';
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#2c333d';
+    ctx.font = 'bold 44px "Malgun Gothic","Noto Sans KR",sans-serif';
+    ctx.fillText('비서실 현황판', 44, 72);
+    ctx.fillStyle = '#8d97a4';
+    ctx.font = '24px "Malgun Gothic","Noto Sans KR",sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(now, W - 44, 68);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#7b8492';
+    ctx.font = 'bold 22px "Malgun Gothic","Noto Sans KR",sans-serif';
+    ctx.fillText('비서실 존 · Pickle Desk · Secretariat', 44, 108);
+    ctx.strokeStyle = 'rgba(120,132,146,.3)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(44, 126); ctx.lineTo(W - 44, 126); ctx.stroke();
+
+    if (!connected) {
+      ctx.fillStyle = '#43505f';
+      ctx.font = 'bold 34px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.fillText('회의실 연결 대기', 44, 208);
+      ctx.font = '27px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.fillStyle = '#68727f';
+      const lines = wrapChars(ctx, '입장 비밀번호를 넣으면 픽클 워커의 상태와 최근 지시·보고가 이 보드에 실시간으로 표시됩니다.', 860, 3);
+      lines.forEach(function (ln, i) { ctx.fillText(ln, 44, 258 + i * 38); });
+      ctx.fillStyle = '#c9535f';
+      ctx.font = 'bold 28px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.fillText('[회의실 연결]  →  💬 회의실에서 입장하거나, 보드를 눌러 비밀번호를 넣으세요.', 44, 440);
+      ctx.setLineDash([10, 8]);
+      ctx.strokeStyle = 'rgba(217,72,97,.45)';
+      ctx.lineWidth = 2;
+      roundRect(ctx, 30, 24, W - 60, H - 48, 14);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      b.tex.needsUpdate = true;
+      return;
+    }
+
+    const workers = (data && data.workers) || [];
+    const statusStyle = {
+      active: ['#d8f5e3', '#1c6b43'],
+      recent: ['#ffefcd', '#8a5a12'],
+      idle: ['#eceff3', '#5d6773'],
+      hiring: ['#ffefcd', '#8a5a12'],
+      planned: ['#eef1f6', '#5d6773'],
+    };
+
+    // 왼쪽: 픽클 워커 현황
+    ctx.fillStyle = '#7b8492';
+    ctx.font = 'bold 24px "Malgun Gothic","Noto Sans KR",sans-serif';
+    ctx.fillText('픽클 워커 현황', 44, 176);
+
+    workers.slice(0, 3).forEach(function (w, i) {
+      const y = 244 + i * 92;
+      const st = statusStyle[w.code] || statusStyle.idle;
+      ctx.fillStyle = st[1];
+      ctx.beginPath(); ctx.arc(60, y - 11, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#2f3742';
+      ctx.font = 'bold 34px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.fillText(w.name, 86, y);
+      ctx.fillStyle = '#8d97a4';
+      ctx.font = '22px "Malgun Gothic","Noto Sans KR",sans-serif';
+      const meta = (w.role || '') + (w.last ? '  ·  최근 ' + w.last : '');
+      ctx.fillText(meta, 86, y + 32);
+      // 상태 배지
+      const bw = 150;
+      ctx.fillStyle = st[0];
+      roundRect(ctx, 630 - bw, y - 32, bw, 40, 20);
+      ctx.fill();
+      ctx.fillStyle = st[1];
+      ctx.font = 'bold 22px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(w.label || '대기', 630 - bw / 2, y - 11);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+    });
+
+    // 왼쪽 아래: 운영 메모
+    ctx.fillStyle = '#8d97a4';
+    ctx.font = '22px "Malgun Gothic","Noto Sans KR",sans-serif';
+    const note = wrapChars(ctx, 'Pickle Desk 작업함과 #general 기준으로 정리합니다. 지시는 김팀장이 접수해 워커에게 배분하고, 결과는 #general에 남깁니다.', 600, 2);
+    note.forEach(function (ln, i) { ctx.fillText(ln, 44, 560 + i * 32); });
+
+    // 구분선
+    ctx.strokeStyle = 'rgba(120,132,146,.28)';
+    ctx.beginPath(); ctx.moveTo(690, 150); ctx.lineTo(690, H - 60); ctx.stroke();
+
+    // 오른쪽: 최근 지시 · 최근 보고
+    ctx.fillStyle = '#7b8492';
+    ctx.font = 'bold 24px "Malgun Gothic","Noto Sans KR",sans-serif';
+    ctx.fillText('최근 지시 · #general', 726, 176);
+
+    const directs = (data && data.directs) || [];
+    if (!directs.length) {
+      ctx.fillStyle = '#8d97a4';
+      ctx.font = '26px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.fillText('최근 지시가 없습니다.', 726, 226);
+    }
+    directs.slice(0, 2).forEach(function (d, i) {
+      const y = 232 + i * 122;
+      ctx.fillStyle = '#c9535f';
+      ctx.font = 'bold 24px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.fillText('👤 ' + (d.who || ''), 726, y);
+      ctx.fillStyle = '#8d97a4';
+      ctx.font = '22px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(d.time || '', W - 44, y);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#3f4a57';
+      ctx.font = '25px "Malgun Gothic","Noto Sans KR",sans-serif';
+      const lines = wrapChars(ctx, d.text || '', 500, 2);
+      lines.forEach(function (ln, j) { ctx.fillText(ln, 726, y + 34 + j * 32); });
+    });
+
+    ctx.fillStyle = '#7b8492';
+    ctx.font = 'bold 24px "Malgun Gothic","Noto Sans KR",sans-serif';
+    ctx.fillText('최근 보고', 726, 486);
+
+    const rep = (data && data.report) || null;
+    if (rep) {
+      ctx.fillStyle = '#3d8f7a';
+      ctx.font = 'bold 24px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.fillText(rep.who || '', 726, 526);
+      ctx.fillStyle = '#8d97a4';
+      ctx.font = '22px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(rep.time || '', W - 44, 526);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#3f4a57';
+      ctx.font = '25px "Malgun Gothic","Noto Sans KR",sans-serif';
+      const rl = wrapChars(ctx, rep.text || '', 500, 2);
+      rl.forEach(function (ln, j) { ctx.fillText(ln, 726, 562 + j * 32); });
+    } else {
+      ctx.fillStyle = '#8d97a4';
+      ctx.font = '26px "Malgun Gothic","Noto Sans KR",sans-serif';
+      ctx.fillText('최근 보고가 없습니다.', 726, 526);
+    }
+
+    b.tex.needsUpdate = true;
   }
 
   /* ---------- 벽시계 그리기 ---------- */
@@ -1246,10 +1514,11 @@ export function createOffice(mount, options) {
 
   /* ---------- 카메라 시점 ---------- */
   const VIEWS = {
-    all: { pos: [0, 9.8, 11.2], tgt: [0, 0.85, -2.6] },
-    secretariat: { pos: [-7.2, 6.2, 6.6], tgt: [-6.6, 0.9, -3.8] },
-    poly: { pos: [7.2, 6.2, 6.6], tgt: [6.4, 0.9, -3.8] },
-    board: { pos: [0, 2.15, -2.1], tgt: [0, 2.0, -7.9] },
+    all: { pos: [0, 11.2, 14.6], tgt: [0, 0.5, -1.0] },
+    kim: { pos: [0, 4.4, 1.2], tgt: [0, 1.1, -5.2] },
+    secretariat: { pos: [-1.8, 5.6, 1.2], tgt: [-6.4, 1.5, -5.2] },
+    poly: { pos: [1.8, 5.6, 1.2], tgt: [6.4, 1.5, -5.2] },
+    common: { pos: [0, 7.2, 12.8], tgt: [0, 0.7, 3.0] },
   };
   let tween = null;
   let currentView = 'all';
@@ -1273,9 +1542,9 @@ export function createOffice(mount, options) {
 
   function viewDistanceScale() {
     const k = aspectKind(camera.aspect || 1.6);
-    if (k === 'portrait') return 1.5;
-    if (k === 'tall') return 1.2;
-    if (k === 'mid') return 1.1;
+    if (k === 'portrait') return 1.55;
+    if (k === 'tall') return 1.18;
+    if (k === 'mid') return 1.07;
     return 1;
   }
 
@@ -1284,13 +1553,9 @@ export function createOffice(mount, options) {
     currentView = VIEWS[name] ? name : 'all';
     const tgt = new THREE.Vector3(v.tgt[0], v.tgt[1], v.tgt[2]);
     const pos = new THREE.Vector3(v.pos[0], v.pos[1], v.pos[2]);
-    if (name === 'board') {
-      pos.z += (viewDistanceScale() - 1) * 2.4;
-    } else {
-      const dir = pos.clone().sub(tgt);
-      dir.multiplyScalar(viewDistanceScale());
-      pos.copy(tgt).add(dir);
-    }
+    const dir = pos.clone().sub(tgt);
+    dir.multiplyScalar(viewDistanceScale());
+    pos.copy(tgt).add(dir);
     if (instant) {
       camera.position.copy(pos);
       controls.target.copy(tgt);
@@ -1323,7 +1588,8 @@ export function createOffice(mount, options) {
         p.label.material.opacity = st.code === 'hiring' ? 0.75 : 1;
       }
     });
-    drawBoard(d.board || { connected: d.connected, rooms: d.rooms });
+    drawSecretariatBoard(d.secBoard || { connected: d.connected });
+    drawPolicyBoard(d.devBoard || { connected: d.connected });
     if (d.clock) drawClock(d.clock);
   }
 
@@ -1333,15 +1599,26 @@ export function createOffice(mount, options) {
   const tmpVec = new THREE.Vector3();
 
   function anchorFor(key) {
-    if (key === 'board') return new THREE.Vector3(0, 2.9, -ROOM.d / 2 + 0.2);
-    if (key === 'phone') return new THREE.Vector3(-6.2 + PHONE.x, 1.55, -4.9 + PHONE.z);
-    if (key === 'slot') return new THREE.Vector3(SLOT.x, 1.95, SLOT.z);
+    if (key === 'secretariat') return new THREE.Vector3(-BOARD_X, 3.0, -ROOM.d / 2 + 0.2);
+    if (key === 'poly') return new THREE.Vector3(BOARD_X, 3.0, -ROOM.d / 2 + 0.2);
+    if (key === 'phone') return new THREE.Vector3(PHONE.x, 1.55, -5.9 + PHONE.z);
+    if (key === 'slot') return new THREE.Vector3(SLOT.x, 1.9, SLOT.z);
+    if (key === 'meeting') return new THREE.Vector3(MEET.x, 1.5, MEET.z);
     const p = people[key];
     if (p) {
       p.group.updateWorldMatrix(true, false);
       return new THREE.Vector3(0.02, 1.72, -0.72).applyMatrix4(p.group.matrixWorld);
     }
     return new THREE.Vector3(0, 1, 0);
+  }
+
+  function bubbleTitle(key) {
+    if (key === 'secretariat') return '비서실 현황판';
+    if (key === 'poly') return '폴리코드팀 현황판';
+    if (key === 'phone') return '회의 전화';
+    if (key === 'slot') return '신규 자리';
+    if (key === 'meeting') return '회의·휴게공간';
+    return people[key] ? people[key].cfg.name : '';
   }
 
   function say(key, text, ms) {
@@ -1351,10 +1628,8 @@ export function createOffice(mount, options) {
       bubbleEl.className = 'bubble';
       bubbleLayer.appendChild(bubbleEl);
     }
-    const title = key === 'board' ? '현황판' : key === 'phone' ? '회의 전화' : key === 'slot' ? '신규 자리' :
-      (people[key] ? people[key].cfg.name : '');
     bubbleEl.innerHTML = '<b></b><span></span>';
-    bubbleEl.firstChild.textContent = title;
+    bubbleEl.firstChild.textContent = bubbleTitle(key);
     bubbleEl.lastChild.textContent = text;
     bubbleEl.classList.add('show');
     bubbleKey = key;
@@ -1495,9 +1770,9 @@ export function createOffice(mount, options) {
     }
 
     // 패닝 한도를 방 안으로
-    controls.target.x = Math.max(-9.5, Math.min(9.5, controls.target.x));
+    controls.target.x = Math.max(-8.5, Math.min(8.5, controls.target.x));
     controls.target.y = Math.max(0.2, Math.min(2.6, controls.target.y));
-    controls.target.z = Math.max(-7.4, Math.min(6.5, controls.target.z));
+    controls.target.z = Math.max(-7.0, Math.min(6.6, controls.target.z));
 
     controls.update();
     renderer.render(scene, camera);

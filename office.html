@@ -71,7 +71,7 @@
 
   /* ---------- camera presets ---------- */
   .presets{
-    left:50%;bottom:20px;transform:translateX(-50%);display:flex;gap:6px;padding:6px;
+    left:50%;bottom:calc(20px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);display:flex;gap:6px;padding:6px;
     background:var(--glass);border:1px solid var(--line);border-radius:22px;
     backdrop-filter:blur(14px) saturate(1.1);-webkit-backdrop-filter:blur(14px) saturate(1.1);
     box-shadow:0 12px 34px rgba(10,12,18,.3);max-width:calc(100vw - 24px);
@@ -217,14 +217,15 @@
     .chip span.lbl{max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .hud-link{padding:7px 10px;font-size:11.5px}
     .presets{
-      left:8px;right:8px;bottom:10px;transform:none;max-width:none;overflow-x:auto;
+      left:8px;right:8px;bottom:calc(10px + env(safe-area-inset-bottom, 0px));transform:none;max-width:none;overflow-x:auto;
       justify-content:flex-start;border-radius:18px;padding:5px;scrollbar-width:none;
     }
     .presets::-webkit-scrollbar{display:none}
     .presets button{padding:8px 11px;font-size:12px}
     .hint{display:none}
     .inspector{
-      top:auto;left:8px;right:8px;bottom:8px;width:auto;max-height:58vh;border-radius:18px;
+      top:auto;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom, 0px));width:auto;
+      max-height:58vh;border-radius:18px;overscroll-behavior:contain;
       transform:translateY(calc(100% + 24px));padding:14px 14px 12px;
     }
     .inspector.show{transform:none}

@@ -953,10 +953,18 @@ export function createOffice(mount, options) {
   const phoneSprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map: canvasTexture(phoneCanvas), transparent: true, depthWrite: false,
   }));
-  phoneSprite.scale.set(0.46, 0.46, 1);
-  phoneSprite.position.set(0, 0.52, 0);
+  phoneSprite.scale.set(0.4, 0.4, 1);
+  phoneSprite.position.set(0, 0.4, 0.02);
   phoneGroup.add(phoneSprite);
   phoneRing = phoneSprite;
+
+  // 보이지 않는 클릭 영역 — 작은 전화기를 조준하기 쉽게 넓혀 둡니다.
+  const phoneHit = new THREE.Mesh(
+    new THREE.BoxGeometry(0.62, 0.5, 0.52),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+  );
+  phoneHit.position.set(0, 0.22, 0.02);
+  phoneGroup.add(phoneHit);
 
   phoneGroup.traverse(function (o) {
     if (o.isMesh) { o.userData.pick = { kind: 'phone' }; picks.push(o); }
@@ -1428,7 +1436,7 @@ export function createOffice(mount, options) {
     // 전화 표시 펄스
     if (phoneRing) {
       const s = 1 + Math.sin(t * 2.3) * 0.06;
-      phoneRing.scale.setScalar(0.46 * s);
+      phoneRing.scale.setScalar(0.4 * s);
       phoneRing.material.opacity = 0.82 + Math.sin(t * 2.3) * 0.14;
     }
 

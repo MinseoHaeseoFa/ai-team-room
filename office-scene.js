@@ -396,7 +396,7 @@ export function createOffice(mount, options) {
 
   // 모형이 놓인 넓은 작업대 (좁은 화면에서도 빈 공간이 배경처럼 보이게)
   const table = new THREE.Mesh(
-    new THREE.CircleGeometry(38, 72),
+    new THREE.CircleGeometry(170, 72),
     new THREE.MeshStandardMaterial({ color: '#ecdfcb', roughness: 0.99, metalness: 0 })
   );
   table.rotation.x = -Math.PI / 2;

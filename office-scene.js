@@ -3,6 +3,7 @@
  * 작은 3D 미니어처 사무실을 three.js 로 그립니다.
  *
  *   [비서실 현황판]  ｜  비서실 ｜ **김팀장(중앙 총괄석)** ｜ 폴리코드팀 ｜  [폴리코드팀 현황판]
+ *   (현황판 위 백월에 부서 팻말 '비서실' · '폴리코드팀' 을 크게 달아 둡니다)
  *                                   (앞쪽·아래)  회의공간 · 휴게공간
  *
  * 이 파일은 '그리는 일' 만 합니다. 회의실 데이터·상태 판단은 office.js 가 하고,
@@ -16,7 +17,7 @@ import { OrbitControls } from './vendor/OrbitControls.js';
 /* 설정                                                                */
 /* ------------------------------------------------------------------ */
 
-const ROOM = { w: 21, d: 15.5, h: 3.4 }; // 방 크기 (x, z, 높이)
+const ROOM = { w: 21, d: 15.5, h: 4.35 }; // 방 크기 (x, z, 높이) — 현황판 위 부서 팻말 자리까지
 
 // 사람 명부. key 는 office.js 와 주고받는 식별자입니다.
 // 김팀장은 비서실(왼쪽)과 폴리코드팀(오른쪽) 사이, 가운데 총괄석에 앉습니다.
@@ -590,6 +591,65 @@ export function createOffice(mount, options) {
   }
   boards.secretariat = buildBoard({ x: -BOARD_X, key: 'secretariat' });
   boards.poly = buildBoard({ x: BOARD_X, key: 'poly' });
+
+  /* ---------- 부서 팻말 (현황판 위 백월, 좌 비서실 / 우 폴리코드팀) ---------- */
+  // 멀리서도 바로 읽히도록 큰 글씨로 그린 고해상도 캔버스를 얇은 3D 판에 붙입니다.
+  function buildDeptSign(cfg) {
+    const g = new THREE.Group();
+    g.position.set(cfg.x, cfg.y, -ROOM.d / 2 + 0.05);
+    scene.add(g);
+
+    const W = 1600, H = 320;
+    const c = canvas2d(W, H);
+    const ctx = c.getContext('2d');
+
+    // 바탕 (아이보리) — 어두운 글씨와 최대 대비
+    ctx.fillStyle = '#fffdf6';
+    ctx.fillRect(0, 0, W, H);
+
+    // 부서 색 안쪽 테두리
+    ctx.strokeStyle = cfg.accent;
+    ctx.lineWidth = 26;
+    roundRect(ctx, 15, 15, W - 30, H - 30, 28);
+    ctx.stroke();
+
+    // 부서 색 아래 띠 (얇게, 시선을 잡아 주는 포인트)
+    ctx.fillStyle = cfg.accent;
+    ctx.fillRect(60, H - 44, W - 120, 12);
+
+    // 부서명 — 두 팻말이 같은 크기로 보이도록 긴 이름 기준으로 한 번에 맞춥니다.
+    let fs = 236;
+    const fontOf = function (s) { return 'bold ' + s + 'px "Malgun Gothic","Noto Sans KR",sans-serif'; };
+    ctx.font = fontOf(fs);
+    while (ctx.measureText(cfg.text).width > W - 150 && fs > 40) {
+      fs -= 6;
+      ctx.font = fontOf(fs);
+    }
+    ctx.fillStyle = '#1d232b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cfg.text, W / 2, H / 2 - 8);
+
+    const tex = canvasTexture(c);
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    tex.needsUpdate = true;
+
+    // 3D 판 — 부서 색 프레임이 판 전체를 감싸고, 앞면이 팻말 내용
+    const frameMat = stdMat(cfg.accentDark, 0.46, 0.2);
+    const plate = addBox(g, 3.98, 0.86, 0.1, frameMat, 0, 0, 0.05);
+    plate.castShadow = true;
+    const face = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.84, 0.78),
+      new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })
+    );
+    face.position.set(0, 0, 0.101);
+    g.add(face);
+
+    // 판이 벽에서 살짝 떠 보이게 앞면만 띄웠습니다.
+    return g;
+  }
+  buildDeptSign({ x: -BOARD_X, y: 3.80, text: '비서실', accent: '#e2738f', accentDark: '#c04f6d' });
+  buildDeptSign({ x: BOARD_X, y: 3.80, text: '폴리코드팀', accent: '#3fae97', accentDark: '#1f8d78' });
 
   /* ---------- 벽시계 (가운데, 김팀장 뒤) ---------- */
   const clockCanvas = canvas2d(256, 256);

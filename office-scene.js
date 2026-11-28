@@ -167,6 +167,35 @@ function woodFloorTexture() {
   return t;
 }
 
+function walnutTexture() {
+  const c = canvas2d(512, 512);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#8a6042';
+  ctx.fillRect(0, 0, 512, 512);
+  const rows = 6, rh = 512 / rows;
+  const tones = ['#8d6344', '#855d3f', '#93684a', '#7f5838', '#8b6142', '#905f3d'];
+  for (let r = 0; r < rows; r++) {
+    ctx.fillStyle = tones[r % tones.length];
+    ctx.fillRect(0, r * rh, 512, rh);
+    for (let g = 0; g < 30; g++) {
+      ctx.strokeStyle = 'rgba(58,36,22,' + (0.05 + Math.random() * 0.07).toFixed(3) + ')';
+      ctx.lineWidth = 0.7 + Math.random() * 1.6;
+      const y = r * rh + Math.random() * rh;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.bezierCurveTo(150, y + (Math.random() - 0.5) * 6, 330, y + (Math.random() - 0.5) * 6, 512, y);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(48,28,16,.35)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(0, r * rh + 0.5); ctx.lineTo(512, r * rh + 0.5); ctx.stroke();
+  }
+  const t = canvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(5, 5);
+  return t;
+}
+
 function rugTexture(base, border, accent) {
   const c = canvas2d(512, 384);
   const ctx = c.getContext('2d');
@@ -395,17 +424,9 @@ export function createOffice(mount, options) {
   addBox(scene, ROOM.w + 1.8, 0.1, ROOM.d + 1.8, stdMat('#b08c63', 0.9), 0, -0.58, 0, false);
 
   // 모형이 놓인 넓은 작업대 (좁은 화면에서도 빈 공간이 배경처럼 보이게)
-  const tableCanvas = canvas2d(512, 512);
-  const tctx = tableCanvas.getContext('2d');
-  const tg = tctx.createRadialGradient(256, 256, 40, 256, 256, 300);
-  tg.addColorStop(0, '#efe1cc');
-  tg.addColorStop(0.6, '#e9d9c2');
-  tg.addColorStop(1, '#e2d0b6');
-  tctx.fillStyle = tg;
-  tctx.fillRect(0, 0, 512, 512);
   const table = new THREE.Mesh(
-    new THREE.CircleGeometry(80, 64),
-    new THREE.MeshStandardMaterial({ map: canvasTexture(tableCanvas), roughness: 0.98, metalness: 0 })
+    new THREE.CircleGeometry(80, 72),
+    new THREE.MeshStandardMaterial({ map: walnutTexture(), roughness: 0.92, metalness: 0 })
   );
   table.rotation.x = -Math.PI / 2;
   table.position.y = -0.66;

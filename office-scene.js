@@ -30,7 +30,7 @@ const PEOPLE = [
   { key: 'kkobung', name: '꼬붕이', emoji: '🐣', color: '#f6b45c', hair: '#3b2f24', screen: 'cool', tag: '@iseohaeseopa2', desk: { x: -7.7, z: -4.9, rotY: 0.2 } },
   { key: 'muse', name: '뮤즈', emoji: '🎨', color: '#a78bfa', hair: '#2b2a3a', screen: 'violet', desk: { x: 4.9, z: -4.9, rotY: -0.2 } },
   { key: 'gemini', name: '제미나이', emoji: '💎', color: '#6fc3ff', hair: '#25313f', screen: 'cool', desk: { x: 7.7, z: -4.9, rotY: -0.2 } },
-  { key: 'claude', name: '클로드', emoji: '🧠', color: '#5ed6a8', hair: '#26302c', tag: '채용 중', desk: { x: 9.3, z: -2.3, rotY: -0.82 }, empty: true },
+  { key: 'claude', name: '클로드', emoji: '🧠', color: '#5ed6a8', hair: '#26302c', tag: '채용 중', desk: { x: 9.2, z: -3.1, rotY: -0.6 }, empty: true },
 ];
 
 const SLOT = { x: -4.9, z: -4.9, rotY: 0.2 };   // 신규 피클 합류 슬롯 (비서실 존 · 꼬붕이 옆)
@@ -207,8 +207,8 @@ function rugTexture(base, border, accent) {
 function roundRugTexture(base, ring, ring2) {
   const c = canvas2d(512, 512);
   const ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, 512, 512);
   ctx.fillStyle = base;
+  ctx.fillRect(0, 0, 512, 512);
   ctx.beginPath(); ctx.arc(256, 256, 250, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = ring;
   ctx.lineWidth = 14;
@@ -704,6 +704,25 @@ export function createOffice(mount, options) {
   }
   scene.add(buildPlant(-9.7, 0, -7.0, 1.2));
   scene.add(buildPlant(8.95, 0, -7.1, 1.0));
+  scene.add(buildPlant(-9.6, 0, 0.4, 0.85));
+
+  /* ---------- 복사·서류 스테이션 (비서실 존) ---------- */
+  function buildPrinterStation(x, z, rotY) {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    g.rotation.y = rotY;
+    addBox(g, 1.5, 0.62, 0.42, stdMat('#e8d9c4', 0.8), 0, 0.31, 0);
+    addBox(g, 1.56, 0.05, 0.48, stdMat('#f2e6d4', 0.7), 0, 0.645, 0);
+    addBox(g, 0.6, 0.02, 0.02, stdMat('#b9a68f', 0.7), -0.34, 0.35, 0.22, false);
+    addBox(g, 0.6, 0.02, 0.02, stdMat('#b9a68f', 0.7), -0.34, 0.52, 0.22, false);
+    // 프린터
+    addBox(g, 0.46, 0.24, 0.36, stdMat('#f4f2ee', 0.6), 0.26, 0.79, 0);
+    addBox(g, 0.4, 0.03, 0.3, stdMat('#dfe2e7', 0.6), 0.26, 0.915, 0, false);
+    addBox(g, 0.3, 0.02, 0.22, stdMat('#cfd3d9', 0.6), 0.26, 0.93, 0.01, false);
+    addBox(g, 0.3, 0.06, 0.22, stdMat('#fdf8ef', 0.9), -0.34, 0.7, 0.02, false);
+    scene.add(g);
+  }
+  buildPrinterStation(-9.9, -1.6, Math.PI / 2);
   scene.add(buildPlant(-9.6, 0, 6.3, 1.05));
   scene.add(buildPlant(9.5, 0, 6.2, 1.0));
 
@@ -1179,13 +1198,13 @@ export function createOffice(mount, options) {
       map: pillTexture(text, 'rgba(255,253,247,.95)', '#6a5a49'),
       transparent: true, depthWrite: false,
     }));
-    sp.scale.set(1.34, 0.335, 1);
+    sp.scale.set(1.16, 0.29, 1);
     sp.position.set(x, y, z);
     scene.add(sp);
     return sp;
   }
-  spaceLabel('회의공간', MEET.x, 1.16, MEET.z + 2.55);
-  spaceLabel('휴게공간', LOUNGE.x, 1.16, LOUNGE.z + 2.5);
+  spaceLabel('회의공간', MEET.x, 1.0, MEET.z + 3.1);
+  spaceLabel('휴게공간', LOUNGE.x, 1.0, LOUNGE.z + 2.85);
 
   // 회의·휴게 영역은 눌러서 안내를 볼 수 있습니다.
   meetingGroup.traverse(function (o) {

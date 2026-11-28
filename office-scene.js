@@ -1561,7 +1561,7 @@ export function createOffice(mount, options) {
 
   function viewDistanceScale() {
     const k = aspectKind(camera.aspect || 1.6);
-    if (k === 'portrait') return 1.55;
+    if (k === 'portrait') return 1.4;
     if (k === 'tall') return 1.18;
     if (k === 'mid') return 1.07;
     return 1;
